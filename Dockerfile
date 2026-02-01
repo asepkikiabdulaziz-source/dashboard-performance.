@@ -24,24 +24,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy backend requirements and install
-COPY backend/requirements.txt ./backend/
-RUN pip install --no-cache-dir -r backend/requirements.txt
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend source
-COPY backend/ ./backend/
+# Copy backend source DIRECTLY to /app
+COPY backend/ .
 
-# Copy built frontend from stage 1
-COPY --from=build-stage /app/frontend/dist ./frontend/dist
+# Copy built frontend to /app/dist
+COPY --from=build-stage /app/frontend/dist ./dist
 
 # Set Environment Variables
-# We set WORKDIR to /app/backend so local imports (auth, rbac) work
-WORKDIR /app/backend
 ENV PORT=8080
-ENV PYTHONPATH=/app:/app/backend
+ENV PYTHONPATH=/app
 
 # Expose port (Cloud Run defaults to 8080)
 EXPOSE 8080
 
 # Command to run the application
-# We are already in /app/backend, so we use main:app
+# We are in /app, so main:app will work perfectly
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port $PORT"]

@@ -42,11 +42,10 @@ app.add_middleware(
 
 # ============ Static File Serving (Production) ============
 # Serve frontend dist folder if it exists (for Docker/Production)
-# Look in current dir OR parent dir (for Docker structure)
-frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
+frontend_path = os.path.join(os.getcwd(), "dist")
 if not os.path.exists(frontend_path):
-    # Try parent directory (useful when running from backend/ folder)
-    frontend_path = os.path.join(os.path.dirname(os.getcwd()), "frontend", "dist")
+    # Try alternate location
+    frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
 
 if os.path.exists(frontend_path) and os.path.isdir(frontend_path):
     print(f"📦 Production mode: Serving static files from {frontend_path}")
