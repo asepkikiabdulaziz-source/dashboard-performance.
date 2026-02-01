@@ -20,7 +20,7 @@ class LeaderboardCache:
     
     def __init__(self, bigquery_service):
         self.bigquery_service = bigquery_service
-        self._lock = threading.Lock()
+        self._lock = threading.RLock() # Use RLock to prevent deadlocks
         
         # Cache storage
         self._all_data: List[Dict[str, Any]] = []
@@ -240,13 +240,20 @@ class LeaderboardCache:
         return summary
 
     def get_cache_info(self) -> Dict[str, Any]:
-        """Get cache statistics"""
+        """Get cache statistics (Safe from deadlocks)"""
         with self._lock:
+            # Calculate metrics from internal data to avoid nested locks
+            data = self._all_data or []
+            unique_regions = sorted(list(set(
+                record.get('region') for record in data if record.get('region')
+            )))
+            
             return {
-                "total_records": len(self._all_data),
+                "total_records": len(data),
                 "cutoff_date": self._cutoff_date,
                 "last_refresh": self._last_refresh.isoformat() if self._last_refresh else None,
-                "regions_count": len(self.get_regions())
+                "regions_count": len(unique_regions),
+                "available_regions": unique_regions
             }
     
     def force_refresh(self):
