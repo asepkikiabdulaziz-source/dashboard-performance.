@@ -30,6 +30,8 @@ Thumbs.db
 *.log
 logs/
 *.txt
+!requirements.txt
+!backend/requirements.txt
 
 # Secrets & Credentials
 .env
