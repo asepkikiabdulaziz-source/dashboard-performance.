@@ -19,16 +19,37 @@ class BigQueryService:
             'GOOGLE_APPLICATION_CREDENTIALS',
             'bigquery-credentials.json'
         )
-        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
         
-        # Initialize client
-        self.client = bigquery.Client()
+        # Only set override if file exists locally
+        if credentials_path and os.path.exists(credentials_path):
+            os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
+            print(f"🔑 Using credentials from {credentials_path}")
+        else:
+            # IMPORTANT: If file doesn't exist, we must UNSET the env var
+            # otherwise the BQ client will try to find a missing file and CRASH
+            if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
+                print(f"☁️ Credentials file '{credentials_path}' not found. Unsetting GOOGLE_APPLICATION_CREDENTIALS to use ADC (Cloud Run Identity).")
+                del os.environ['GOOGLE_APPLICATION_CREDENTIALS']
+            else:
+                print("☁️ Credentials file not found, using environment default identity (ADC)")
+        
+        # Initialize client with error handling
+        try:
+            self.client = bigquery.Client()
+            print("✅ BigQuery Client successfully initialized")
+        except Exception as e:
+            print(f"❌ Failed to initialize BigQuery Client: {e}")
+            self.client = None
         
         # Configuration
         self.project_id = os.getenv('BIGQUERY_PROJECT_ID', 'myproject-482315')
         self.dataset = os.getenv('BIGQUERY_DATASET', 'pma')
         self.table = os.getenv('BIGQUERY_TABLE', 'FINAL_SCORECARD_RANKED')
-        self.full_table_id = f"`{self.project_id}.{self.dataset}.{self.table}`"
+        
+        if self.project_id and self.dataset and self.table:
+            self.full_table_id = f"`{self.project_id}.{self.dataset}.{self.table}`"
+        else:
+            self.full_table_id = None
     
     def _apply_region_filter(self, region: str) -> str:
         """

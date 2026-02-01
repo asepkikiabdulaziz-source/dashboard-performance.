@@ -40,6 +40,12 @@ class LeaderboardCache:
             logger.info("🔄 Refreshing leaderboard cache from BigQuery...")
             start_time = datetime.now()
             
+            # Safety check for service initialization
+            if not self.bigquery_service:
+                raise Exception("BigQuery Service is not initialized (bigquery_service is None)")
+            if not getattr(self.bigquery_service, 'client', None):
+                raise Exception("BigQuery Client is not available (client is None)")
+            
             # 1. Fetch data OUTSIDE lock (Slow part)
             print("🔍 [CACHE] Fetching cutoff date...")
             cutoff_date = self.bigquery_service.get_cutoff_date()
