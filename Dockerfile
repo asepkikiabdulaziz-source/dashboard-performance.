@@ -42,4 +42,4 @@ EXPOSE 8080
 
 # Command to run the application
 # We run from the /app directory but point to backend.main:app
-CMD ["sh", "-code", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"]
