@@ -35,7 +35,7 @@ COPY --from=build-stage /app/frontend/dist ./frontend/dist
 
 # Set Environment Variables
 ENV PORT=8080
-ENV PYTHONPATH=/app/backend
+ENV PYTHONPATH=/app
 
 # Expose port (Cloud Run defaults to 8080)
 EXPOSE 8080
