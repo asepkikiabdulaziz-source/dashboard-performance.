@@ -111,15 +111,6 @@ class LeaderboardCache:
         """
         Get leaderboard data. Use cache if ready, otherwise fallback to BigQuery.
         """
-    def get_leaderboard(
-        self, 
-        region: str, 
-        division: Optional[str] = None,
-        limit: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Get leaderboard data. Use cache if ready, otherwise fallback to BigQuery.
-        """
         # Trigger background check
         self._check_and_refresh()
         
