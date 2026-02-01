@@ -11,3 +11,7 @@ numpy==1.26.3
 python-dotenv==1.0.0
 google-cloud-bigquery
 google-cloud-storage
+google-cloud-bigquery-storage
+db-dtypes
+pyarrow
+cryptography
