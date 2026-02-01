@@ -25,6 +25,7 @@ class LeaderboardCache:
         self._all_data: List[Dict[str, Any]] = []
         self._cutoff_date: Optional[str] = None
         self._last_refresh: Optional[datetime] = None
+        self._last_error: Optional[str] = None # Track errors
         
         # Warm cache in background
         logger.info("🚀 Initializing LeaderboardCache background warming...")
@@ -63,6 +64,7 @@ class LeaderboardCache:
                 self._all_data = all_data
                 self._cutoff_date = cutoff_date
                 self._last_refresh = datetime.now()
+                self._last_error = None # Clear error on success
             
             elapsed = (datetime.now() - start_time).total_seconds()
             msg = f"✅ [CACHE] REFRESHED: {len(all_data)} records in {elapsed:.2f}s"
@@ -70,7 +72,10 @@ class LeaderboardCache:
             print(msg)
             
         except Exception as e:
-            print(f"❌ [CACHE] FATAL ERROR during refresh: {str(e)}")
+            error_msg = str(e)
+            print(f"❌ [CACHE] FATAL ERROR during refresh: {error_msg}")
+            with self._lock:
+                self._last_error = error_msg
             logger.error(f"❌ Cache refresh failed: {e}")
             import traceback
             traceback.print_exc()
@@ -158,6 +163,7 @@ class LeaderboardCache:
             data = self._all_data or []
             cutoff = self._cutoff_date
             last_ref = self._last_refresh
+            last_err = self._last_error
         
         # Calculate regions outside lock if possible, but small set is fine inside
         regions = sorted(list(set(r.get('region') for r in data if r.get('region'))))
@@ -166,6 +172,7 @@ class LeaderboardCache:
             "total_records": len(data),
             "cutoff_date": cutoff,
             "last_refresh": last_ref.isoformat() if last_ref else None,
+            "last_error": last_err,
             "regions_count": len(regions),
             "available_regions": regions
         }

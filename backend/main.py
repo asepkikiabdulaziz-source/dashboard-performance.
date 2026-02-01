@@ -491,6 +491,11 @@ async def health_check():
     return {
         "status": "healthy",
         "cache": cache_manager.get_cache_info() if cache_manager else "not_initialized",
+        "bq_auth": {
+            "method": "ADC" if not os.getenv('GOOGLE_APPLICATION_CREDENTIALS') else "FILE",
+            "file_exists": os.path.exists(os.getenv('GOOGLE_APPLICATION_CREDENTIALS', '')) if os.getenv('GOOGLE_APPLICATION_CREDENTIALS') else False,
+            "project_id": bigquery_service.project_id if bigquery_service else None
+        },
         "services": {
             "api": "operational",
             "auth": "operational"
