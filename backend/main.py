@@ -98,6 +98,7 @@ cache_manager: Optional[LeaderboardCache] = None
 # Initialize data generator and BigQuery service
 data_generator = None
 bigquery_service = None
+cache_manager = None  # Global cache manager
 
 try:
     print("🔄 Initializing Mock Data Generator...")
@@ -492,6 +493,7 @@ async def health_check():
     """Detailed health check"""
     return {
         "status": "healthy",
+        "cache": cache_manager.get_cache_info() if cache_manager else "not_initialized",
         "services": {
             "api": "operational",
             "auth": "operational"
