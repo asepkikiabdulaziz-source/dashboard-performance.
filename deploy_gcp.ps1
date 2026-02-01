@@ -2,9 +2,10 @@
 # Simpan sebagai deploy_gcp.ps1
 
 # 1. Konfigurasi (Ubah PROJECT_ID sesuai ID di GCP Console Anda)
-$PROJECT_ID = "nabati-performance-dash" # Ganti dengan Project ID Anda
+$PROJECT_ID = "myproject-482315" # Berdasarkan file JSON Anda
 $IMAGE_NAME = "dashboard-performance"
-$REGION = "asia-southeast2" # Jakarta
+$REGION = "asia-southeast2"
+$REPOSITORY = "dashboard-repo"
 
 Write-Host "🚀 Memulai proses deployment ke Google Cloud Run..." -ForegroundColor Cyan
 
