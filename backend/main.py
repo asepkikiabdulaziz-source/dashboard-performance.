@@ -40,29 +40,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ============ Static File Serving (Production) ============
-# Serve frontend dist folder if it exists (for Docker/Production)
-frontend_path = os.path.join(os.getcwd(), "dist")
-if not os.path.exists(frontend_path):
-    # Try alternate location
-    frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
 
-if os.path.exists(frontend_path) and os.path.isdir(frontend_path):
-    print(f"📦 Production mode: Serving static files from {frontend_path}")
-    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
-    
-    @app.get("/{full_path:path}")
-    async def serve_frontend(full_path: str):
-        # Exclude API calls from being caught by the wildcard
-        if full_path.startswith("api/"):
-            raise HTTPException(status_code=404, detail="API endpoint not found")
-            
-        file_path = os.path.join(frontend_path, full_path)
-        if os.path.exists(file_path) and os.path.isfile(file_path):
-            return FileResponse(file_path)
-        return FileResponse(os.path.join(frontend_path, "index.html"))
-else:
-    print("🚀 Development mode: Static file serving disabled (use Vite dev server)")
+# ============ Application Configuration ============
 
 # ... (skip cache init) ...
 
@@ -567,3 +546,31 @@ async def debug_check_assignments():
         return {"status": "found", "data_sample": res.data[0] if res.data else "empty"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# ============ Static File Serving (Production) ============
+# MUST BE AT THE END to avoid shadowing API routes
+frontend_path = os.path.join(os.getcwd(), "dist")
+if not os.path.exists(frontend_path):
+    frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
+
+if os.path.exists(frontend_path) and os.path.isdir(frontend_path):
+    print(f"📦 Production mode: Serving static files from {frontend_path}")
+    # Mount assets folder
+    if os.path.exists(os.path.join(frontend_path, "assets")):
+        app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
+    
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # If it reaches here, it didn't match any API route above
+        # If it's an /api/ call, it's definitely a 404
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+            
+        file_path = os.path.join(frontend_path, full_path)
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        
+        # Fallback to index.html for SPA routing
+        return FileResponse(os.path.join(frontend_path, "index.html"))
+else:
+    print("🚀 Development mode: Static file serving disabled")
