@@ -475,16 +475,6 @@ async def get_competition_ranks_legacy(
 
 # ============ Health Check ============
 
-@app.get("/")
-async def root():
-    """API health check"""
-    return {
-        "status": "healthy",
-        "message": "Dashboard Performance API",
-        "version": "1.0.0"
-    }
-
-
 @app.get("/health")
 async def health_check():
     """Detailed health check"""
