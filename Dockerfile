@@ -40,6 +40,6 @@ ENV PYTHONPATH=/app
 # Expose port (Cloud Run defaults to 8080)
 EXPOSE 8080
 
-# Command to run the application
-# We are in /app, so main:app will work perfectly
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port $PORT"]
+# Command to run the application via our diagnostic bootstrap
+# This ensures we see full tracebacks if imports fail
+CMD ["python", "bootstrap.py"]
