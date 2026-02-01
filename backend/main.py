@@ -92,9 +92,6 @@ async def login(credentials: LoginRequest):
         "token_type": "bearer",
         "user": user
     }
-# Global cache instance (initialized on startup)
-cache_manager: Optional[LeaderboardCache] = None
-
 # Initialize data generator and BigQuery service
 data_generator = None
 bigquery_service = None
@@ -520,7 +517,9 @@ async def debug_bigquery(current_user: Dict[str, Any] = Depends(get_current_user
         "error": None,
         "dataset_exists": False,
         "row_count": 0,
-        "available_datasets": []
+        "available_datasets": [],
+        "auth_method": "ADC" if not os.getenv('GOOGLE_APPLICATION_CREDENTIALS') else f"FILE: {os.getenv('GOOGLE_APPLICATION_CREDENTIALS')}",
+        "credentials_file_exists": os.path.exists(os.getenv('GOOGLE_APPLICATION_CREDENTIALS', '')) if os.getenv('GOOGLE_APPLICATION_CREDENTIALS') else False
     }
     
     try:

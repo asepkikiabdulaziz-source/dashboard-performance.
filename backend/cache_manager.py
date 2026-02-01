@@ -35,28 +35,42 @@ class LeaderboardCache:
     def _refresh_cache(self):
         """Reload all data from BigQuery with minimal lock hold time"""
         try:
+            print("🔄 [CACHE] Starting refresh from BigQuery...")
             logger.info("🔄 Refreshing leaderboard cache from BigQuery...")
             start_time = datetime.now()
             
             # 1. Fetch data OUTSIDE lock (Slow part)
+            print("🔍 [CACHE] Fetching cutoff date...")
             cutoff_date = self.bigquery_service.get_cutoff_date()
+            print(f"📅 [CACHE] Cutoff Date: {cutoff_date}")
+            
+            print("🚀 [CACHE] Executing BigQuery Leaderboard Query (ALL Regions)...")
             all_data_df = self.bigquery_service.get_leaderboard(
                 region="ALL",
                 division=None,
                 limit=None
             )
+            
+            row_count = len(all_data_df)
+            print(f"📊 [CACHE] Query Complete. Found {row_count} records.")
+            
+            print("🧩 [CACHE] Converting to dictionary...")
             all_data = all_data_df.to_dict(orient='records')
             
             # 2. Update status and data INSIDE lock (Fast part)
+            print("🔒 [CACHE] Updating in-memory state...")
             with self._lock:
                 self._all_data = all_data
                 self._cutoff_date = cutoff_date
                 self._last_refresh = datetime.now()
             
             elapsed = (datetime.now() - start_time).total_seconds()
-            logger.info(f"✅ CACHE REFRESHED: {len(all_data)} records in {elapsed:.2f}s")
+            msg = f"✅ [CACHE] REFRESHED: {len(all_data)} records in {elapsed:.2f}s"
+            logger.info(msg)
+            print(msg)
             
         except Exception as e:
+            print(f"❌ [CACHE] FATAL ERROR during refresh: {str(e)}")
             logger.error(f"❌ Cache refresh failed: {e}")
             import traceback
             traceback.print_exc()
