@@ -525,12 +525,45 @@ if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
+@app.get("/api/debug/bq")
+async def debug_bigquery(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Diagnostic endpoint for BigQuery health"""
+    if current_user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+        
+    results = {
+        "project_id": bigquery_service.project_id,
+        "dataset": bigquery_service.dataset,
+        "table": bigquery_service.table,
+        "conn": "UNKNOWN",
+        "error": None,
+        "dataset_exists": False,
+        "row_count": 0,
+        "available_datasets": []
+    }
+    
+    try:
+        datasets = list(bigquery_service.client.list_datasets())
+        results["conn"] = "OK"
+        results["available_datasets"] = [d.dataset_id for d in datasets]
+        results["dataset_exists"] = bigquery_service.dataset in results["available_datasets"]
+        
+        if results["dataset_exists"]:
+            query = f"SELECT COUNT(*) as total FROM {bigquery_service.full_table_id}"
+            count_res = bigquery_service.client.query(query).to_dataframe()
+            results["row_count"] = int(count_res.iloc[0]['total'])
+    except Exception as e:
+        results["conn"] = "FAILED"
+        results["error"] = str(e)
+        
+    return results
+
 @app.get("/api/debug/assignments")
 async def debug_check_assignments():
     try:
         from supabase_client import get_supabase_client
         sb = get_supabase_client()
         res = sb.schema('hr').table('assignments').select("*").limit(1).execute()
-        return {"status": "found", "columns": list(res.data[0].keys()) if res.data else "empty_table"}
+        return {"status": "found", "data_sample": res.data[0] if res.data else "empty"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
