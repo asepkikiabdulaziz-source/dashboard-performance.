@@ -1,0 +1,213 @@
+/* Competition Monitor Styles - Unified with Leaderboard Theme */
+
+.competition-container {
+    padding: 24px;
+    background: #f0f2f5;
+    min-height: 100vh;
+}
+
+.competition-header {
+    margin-bottom: 24px;
+}
+
+.competition-header h1 {
+    font-size: 32px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.competition-header h4 {
+    font-size: 18px;
+    color: #1890ff;
+    margin: 8px 0;
+}
+
+/* Card Styling */
+.competition-card {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.competition-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Podium Styling */
+.podium-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    height: 240px;
+    gap: 24px;
+    margin: 40px 0 60px 0;
+}
+
+.podium-item {
+    position: relative;
+    padding: 20px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.podium-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* Rank Badge */
+.rank-badge-gold {
+    position: absolute;
+    top: -15px;
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
+}
+
+.rank-badge-silver {
+    position: absolute;
+    top: -15px;
+    background: linear-gradient(135deg, #C0C0C0 0%, #A8A8A8 100%);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(192, 192, 192, 0.4);
+}
+
+.rank-badge-bronze {
+    position: absolute;
+    top: -15px;
+    background: linear-gradient(135deg, #CD7F32 0%, #B87333 100%);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(205, 127, 50, 0.4);
+}
+
+/* Table Styling */
+.competition-table .ant-table {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.competition-table .ant-table-thead>tr>th {
+    background: #fafafa;
+    color: #262626;
+    font-weight: 600;
+    border-bottom: 2px solid #f0f0f0;
+    font-size: 14px;
+    padding: 16px;
+}
+
+.competition-table .ant-table-tbody>tr:hover {
+    background: #fafafa !important;
+}
+
+/* Top 3 Row Highlighting */
+.competition-table .ant-table-tbody>tr.top-1-row {
+    background: linear-gradient(to right, #fff7e6 0%, #ffffff 100%) !important;
+}
+
+.competition-table .ant-table-tbody>tr.top-2-row {
+    background: linear-gradient(to right, #f0f7ff 0%, #ffffff 100%) !important;
+}
+
+.competition-table .ant-table-tbody>tr.top-3-row {
+    background: linear-gradient(to right, #fff1f0 0%, #ffffff 100%) !important;
+}
+
+/* Expanded Row Styling */
+.competition-table .ant-table-expanded-row {
+    animation: expandRow 0.3s ease-out;
+}
+
+@keyframes expandRow {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Point Breakdown Card */
+.point-breakdown-card {
+    background: #fff;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.point-breakdown-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.point-breakdown-card .ant-card-head {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px 8px 0 0;
+    font-weight: 600;
+    border: none;
+}
+
+/* Filter Section */
+.filter-section {
+    margin: 16px 0;
+    text-align: right;
+}
+
+.filter-section .ant-select {
+    min-width: 200px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .competition-container {
+        padding: 12px;
+    }
+
+    .competition-header h1 {
+        font-size: 24px;
+    }
+
+    .podium-container {
+        height: 180px;
+        gap: 12px;
+    }
+}
+
+/* Custom Scrollbar */
+.ant-table-body::-webkit-scrollbar {
+    height: 8px;
+}
+
+.ant-table-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.ant-table-body::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.ant-table-body::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}

@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
+
+# IDE
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+*.txt
+
+# Secrets & Credentials
+.env
+.env.local
+*-credentials.json
+*.key
+*.pem
+
+# Data Files (Avoid cluttering repo with large binaries)
+*.xlsx
+*.csv
+!frontend/package.json
+!frontend/package-lock.json
+!package.json
+!package-lock.json
+
+# Build and IDE
+dist/
+node_modules/
+.vscode/
+.idea/
+__pycache__/
+.venv/

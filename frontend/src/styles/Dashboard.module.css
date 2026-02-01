@@ -1,0 +1,92 @@
+.layout {
+    min-height: 100vh;
+    background: #f0f2f5;
+}
+
+.header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 0 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.headerContent {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.logo h3 {
+    color: white !important;
+}
+
+.userInfo {
+    display: flex;
+    align-items: center;
+}
+
+.content {
+    padding: 24px;
+    min-height: calc(100vh - 64px);
+}
+
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.pageHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.kpiCard {
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+    border: none;
+}
+
+.kpiCard:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+}
+
+.chartCard {
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    height: 100%;
+    min-height: 400px;
+    border: none;
+}
+
+.chartCard .ant-card-head {
+    border-bottom: 2px solid #f0f0f0;
+    font-weight: 600;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .pageHeader {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .headerContent {
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .content {
+        padding: 16px;
+    }
+}
