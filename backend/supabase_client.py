@@ -10,21 +10,27 @@ url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_KEY")
 service_key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
-if not url or not key:
-    raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in .env file")
-
 # Standard Client (Anon) - For regular user operations
 def get_supabase_client() -> Client:
-    if not url or not key:
-        raise ValueError("Supabase URL or Key is missing from environment variables")
-    return create_client(url, key)
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_KEY")
+    
+    if not supabase_url or not supabase_key:
+        print("⚠️ WARNING: SUPABASE_URL or SUPABASE_KEY is missing from environment!")
+        raise ValueError("Supabase configuration missing")
+    
+    return create_client(supabase_url, supabase_key)
 
 # Admin Client (Service Role) - For User Management
 def get_supabase_admin() -> Client:
-    # Service role key provides admin access
-    if not url or not service_key: # Changed to check service_key
-        raise ValueError("Supabase URL or Service Role Key is missing from environment variables") # Updated error message
-    return create_client(url, service_key)
+    supabase_url = os.environ.get("SUPABASE_URL")
+    admin_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
+    
+    if not supabase_url or not admin_key:
+        print("⚠️ WARNING: SUPABASE_URL or Admin Key is missing from environment!")
+        raise ValueError("Supabase admin configuration missing")
+        
+    return create_client(supabase_url, admin_key)
 
 # --- Fallback HTTP Client (Bypasses supabase-py/gotrue proxy bug) ---
 import requests
