@@ -9,3 +9,5 @@ python-multipart==0.0.6
 pandas==2.2.0
 numpy==1.26.3
 python-dotenv==1.0.0
+google-cloud-bigquery
+google-cloud-storage
