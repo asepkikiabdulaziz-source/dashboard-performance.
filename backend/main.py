@@ -133,14 +133,18 @@ async def login(credentials: LoginRequest):
     """
     Authenticate user and return JWT token
     """
+    logger.info(f"Login attempt for email: {credentials.email}")
     user = authenticate_user(credentials.email, credentials.password)
     
     if not user:
+        logger.warning(f"Login failed for email: {credentials.email}")
         raise HTTPException(
             status_code=401,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    logger.info(f"Login successful for email: {credentials.email}, role: {user.get('role')}")
         
     # Inject permissions
     role = user.get('role', 'viewer')

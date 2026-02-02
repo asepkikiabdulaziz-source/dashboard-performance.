@@ -296,10 +296,13 @@ def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
             "password": password
         }
         
-        response = requests.post(api_url, headers=headers, json=payload)
+        response = requests.post(api_url, headers=headers, json=payload, timeout=10)
         
         if response.status_code != 200:
-            logger.warning(f"Auth Login Error: {response.status_code} - {response.text[:200]}")
+            error_detail = response.text[:500] if response.text else "No error message"
+            logger.warning(f"Auth Login Error for {email}: Status {response.status_code} - {error_detail}")
+            # Log Supabase URL (without sensitive parts) for debugging
+            logger.debug(f"Supabase URL: {url[:30]}... (truncated)")
             return None
             
         data = response.json()
