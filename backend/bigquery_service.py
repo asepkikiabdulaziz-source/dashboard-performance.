@@ -222,6 +222,7 @@ class BigQueryService:
             df = self.client.query(query).to_dataframe()
             
             if df.empty:
+                logger.debug(f"KPIs query returned empty for region {region}")
                 return {
                     "total_revenue": 0,
                     "total_target": 0,
@@ -475,9 +476,15 @@ class BigQueryService:
         table_map = config.get("tables", {})
         
         if level.lower() not in table_map:
-            raise ValueError(f"Invalid level: {level}")
-            
+            raise ValueError(f"Invalid level: {level}. Available levels: {list(table_map.keys())}")
+        
         table_name = table_map[level.lower()]
+        
+        # Check if table is disabled (set to None)
+        if table_name is None:
+            logger.warning(f"Table for level {level} in competition {competition_id} is disabled")
+            return []
+        
         full_table_id = f"`{self.project_id}.{self.dataset}.{table_name}`"
         
         # --- Advanced RLS Filtering (NUANCED & ZONE-BASED) ---
@@ -546,6 +553,7 @@ class BigQueryService:
         try:
             df = self.client.query(query).to_dataframe()
             if df.empty:
+                logger.debug(f"Competition query returned empty result for {competition_id}/{level}")
                 return []
                 
             # Normalize columns
@@ -592,11 +600,17 @@ class BigQueryService:
             return result
             
         except Exception as e:
-            print(f"Error fetching competition ranks: {e}")
-            raise
-            
-        except Exception as e:
-            print(f"Error fetching competition ranks: {e}")
+            error_msg = str(e)
+            # Check if table doesn't exist or was deleted
+            if "not found" in error_msg.lower() or "does not exist" in error_msg.lower() or "not found in dataset" in error_msg.lower():
+                logger.warning(f"Table {full_table_id} does not exist. Competition {competition_id} level {level} may be disabled or table was deleted.")
+                return []  # Return empty instead of crashing
+            # Check for permission errors
+            if "permission" in error_msg.lower() or "access denied" in error_msg.lower():
+                logger.error(f"Permission denied accessing {full_table_id}. Check BigQuery permissions.")
+                raise ValueError(f"Access denied to table {table_name}. Please check BigQuery permissions.")
+            # Other errors - log and raise
+            logger.error(f"Error fetching competition ranks for {competition_id}/{level}: {e}", exc_info=True)
             raise
 
 

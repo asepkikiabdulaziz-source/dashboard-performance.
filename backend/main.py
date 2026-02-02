@@ -564,11 +564,12 @@ async def get_region_comparison_bigquery(
 
 @app.get("/api/competitions/list")
 async def get_competitions_list(current_user: dict = Depends(get_current_user)):
-    """Get list of available competitions"""
-    from competition_config import COMPETITIONS
+    """Get list of available competitions (only enabled ones)"""
+    from competition_config import get_available_competitions
+    competitions = get_available_competitions()
     return {"data": [
         {"id": k, "title": v["title"], "period": v.get("period", "")} 
-        for k, v in COMPETITIONS.items()
+        for k, v in competitions.items()
     ]}
 
 
