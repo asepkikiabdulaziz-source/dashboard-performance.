@@ -44,15 +44,22 @@ class BigQueryService:
             logger.error(f"Failed to initialize BigQuery Client: {e}")
             self.client = None
         
-        # Configuration with validation
-        self.project_id = os.getenv('BIGQUERY_PROJECT_ID', 'myproject-482315') or 'myproject-482315'
-        self.dataset = os.getenv('BIGQUERY_DATASET', 'pma') or 'pma'
-        self.table = os.getenv('BIGQUERY_TABLE', 'FINAL_SCORECARD_RANKED') or 'FINAL_SCORECARD_RANKED'
+        # Configuration - NO HARDCODED DEFAULTS
+        # All values must be set via environment variables
+        self.project_id = os.getenv('BIGQUERY_PROJECT_ID', '').strip()
+        self.dataset = os.getenv('BIGQUERY_DATASET', '').strip()
+        self.table = os.getenv('BIGQUERY_TABLE', '').strip()
         
-        # Validate all required values are set
-        if not self.project_id or not self.dataset or not self.table:
-            logger.error(f"BigQuery configuration incomplete: project_id={self.project_id}, dataset={self.dataset}, table={self.table}")
-            raise ValueError("BigQuery configuration is incomplete. Please set BIGQUERY_PROJECT_ID, BIGQUERY_DATASET, and BIGQUERY_TABLE environment variables.")
+        # Validate all required values are set - NO DEFAULTS ALLOWED
+        if not self.project_id:
+            logger.error("BIGQUERY_PROJECT_ID is not set")
+            raise ValueError("BIGQUERY_PROJECT_ID environment variable is required. Please set it in your deployment configuration.")
+        if not self.dataset:
+            logger.error("BIGQUERY_DATASET is not set")
+            raise ValueError("BIGQUERY_DATASET environment variable is required. Please set it in your deployment configuration.")
+        if not self.table:
+            logger.error("BIGQUERY_TABLE is not set")
+            raise ValueError("BIGQUERY_TABLE environment variable is required. Please set it in your deployment configuration.")
         
         self.full_table_id = f"`{self.project_id}.{self.dataset}.{self.table}`"
         logger.info(f"BigQuery configured: {self.full_table_id}")

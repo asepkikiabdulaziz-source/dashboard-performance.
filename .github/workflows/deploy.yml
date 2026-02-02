@@ -6,10 +6,19 @@ on:
       - main  # Triggered every time you push to 'main' branch
 
 env:
-  PROJECT_ID: myproject-482315
-  SERVICE_NAME: dashboard-performance
-  REGION: asia-southeast2
-  REPOSITORY: dashboard-repo # Nama repository yang akan dibuat di Artifact Registry
+  # All deployment configuration from GitHub Secrets/Variables
+  # NO HARDCODED VALUES - must be set in repository settings
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: ${{ vars.GCP_SERVICE_NAME || 'dashboard-performance' }}
+  REGION: ${{ vars.GCP_REGION || 'asia-southeast2' }}
+  REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY || 'dashboard-repo' }}
+  
+  # Cloud Run resource configuration
+  MEMORY: ${{ vars.CLOUD_RUN_MEMORY || '1Gi' }}
+  CPU: ${{ vars.CLOUD_RUN_CPU || '1' }}
+  MIN_INSTANCES: ${{ vars.CLOUD_RUN_MIN_INSTANCES || '0' }}
+  MAX_INSTANCES: ${{ vars.CLOUD_RUN_MAX_INSTANCES || '10' }}
+  TIMEOUT: ${{ vars.CLOUD_RUN_TIMEOUT || '300' }}
 
 jobs:
   deploy:
@@ -37,21 +46,31 @@ jobs:
         docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
         docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
 
+    - name: Validate Configuration
+      run: |
+        if [ -z "${{ env.PROJECT_ID }}" ]; then
+          echo "❌ ERROR: GCP_PROJECT_ID secret is not set"
+          echo "Please set GCP_PROJECT_ID in repository secrets"
+          exit 1
+        fi
+        echo "✅ Configuration validated"
+        echo "Project ID: ${{ env.PROJECT_ID }}"
+        echo "Service: ${{ env.SERVICE_NAME }}"
+        echo "Region: ${{ env.REGION }}"
+
     - name: Deploy to Cloud Run
       run: |
         # Deploy with --update-env-vars to preserve existing env vars
-        # This only updates specified vars and keeps others intact
-        # IMPORTANT: If a secret is empty in GitHub, the env var will be set to empty string
-        # Make sure all required secrets are set in GitHub repository settings
+        # All configuration comes from GitHub Secrets/Variables - NO HARDCODED VALUES
         gcloud run deploy ${{ env.SERVICE_NAME }} \
           --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
           --region ${{ env.REGION }} \
           --platform managed \
           --allow-unauthenticated \
           --port 8080 \
-          --memory 1Gi \
-          --cpu 1 \
-          --min-instances 0 \
-          --max-instances 10 \
-          --timeout 300 \
-          --update-env-vars ENVIRONMENT=production,LOG_LEVEL=INFO,RATE_LIMIT_ENABLED=true,CACHE_ENABLED=true,SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_KEY=${{ secrets.SUPABASE_KEY }},SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }},BIGQUERY_PROJECT_ID=${{ secrets.BIGQUERY_PROJECT_ID }},BIGQUERY_DATASET=${{ secrets.BIGQUERY_DATASET }},BIGQUERY_TABLE=${{ secrets.BIGQUERY_TABLE }},ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }},SECRET_KEY=${{ secrets.SECRET_KEY }}
+          --memory ${{ env.MEMORY }} \
+          --cpu ${{ env.CPU }} \
+          --min-instances ${{ env.MIN_INSTANCES }} \
+          --max-instances ${{ env.MAX_INSTANCES }} \
+          --timeout ${{ env.TIMEOUT }} \
+          --update-env-vars ENVIRONMENT=production,LOG_LEVEL=INFO,RATE_LIMIT_ENABLED=true,CACHE_ENABLED=true,SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_KEY=${{ secrets.SUPABASE_KEY }},SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }},BIGQUERY_PROJECT_ID=${{ secrets.BIGQUERY_PROJECT_ID }},BIGQUERY_DATASET=${{ secrets.BIGQUERY_DATASET }},BIGQUERY_TABLE=${{ secrets.BIGQUERY_TABLE }},ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }},SECRET_KEY=${{ secrets.SECRET_KEY }},GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GCP_REGION=${{ env.REGION }},GCP_SERVICE_NAME=${{ env.SERVICE_NAME }},GCP_ARTIFACT_REPOSITORY=${{ env.REPOSITORY }}
