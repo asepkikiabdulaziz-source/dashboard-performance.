@@ -61,6 +61,22 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
     const [allZonasBM, setAllZonasBM] = useState(['ALL']);
     const [allZonasRBM, setAllZonasRBM] = useState(['ALL']);
 
+    // Mobile responsive detection
+    const [isMobile, setIsMobile] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return window.innerWidth < 768;
+        }
+        return false;
+    });
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     const fetchData = async (compId, level, regionFilter = 'ALL', zonaBMFilter = 'ALL', zonaRBMFilter = 'ALL') => {
         setLoading(true);
         try {
@@ -190,64 +206,72 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
         };
     }, [filteredData]);
 
-    // Specific columns for ASS and BM based on user request
+    // Specific columns for ASS and BM - Exact pattern from Leaderboard
     const columns = useMemo(() => {
         if (activeTab === 'ass') {
             return [
                 {
-                    title: 'Rank',
+                    title: <span style={{ whiteSpace: 'nowrap' }}>RANK</span>,
                     dataIndex: 'rank',
                     key: 'rank',
-                    width: 70,
+                    width: 75,
+                    fixed: 'left',
                     align: 'center',
                     render: (rank) => {
                         if (rank === 1) return <Badge count={<CrownOutlined style={{ color: '#FFD700' }} />} style={{ backgroundColor: 'transparent' }} />;
                         if (rank === 2) return <Badge count={<CrownOutlined style={{ color: '#C0C0C0' }} />} style={{ backgroundColor: 'transparent' }} />;
                         if (rank === 3) return <Badge count={<CrownOutlined style={{ color: '#CD7F32' }} />} style={{ backgroundColor: 'transparent' }} />;
                         return <Tag color="default">#{rank}</Tag>;
-                    }
+                    },
+                    sorter: (a, b) => a.rank - b.rank,
                 },
                 {
-                    title: 'NIK',
-                    dataIndex: 'nik',
-                    key: 'nik',
-                    render: (val) => <Text type="secondary" style={{ fontSize: '12px' }}>{val}</Text>
-                },
-                {
-                    title: 'Nama ASS',
-                    dataIndex: 'name', // Mapped from NAMA_ASS in backend
+                    title: <span style={{ fontSize: '11px' }}>NAMA ASS</span>,
+                    dataIndex: 'name',
                     key: 'name',
-                    render: (val) => <Text strong>{val}</Text>
-                },
-                {
-                    title: 'Cabang',
-                    dataIndex: 'cabang',
-                    key: 'cabang',
+                    width: 140,
+                    fixed: 'left',
                     render: (val, record) => (
                         <div>
-                            <Text>{val}</Text>
-                            <div style={{ fontSize: '10px', color: '#8c8c8c' }}>{record.region}</div>
+                            <Text strong style={{ fontSize: '11px' }}>{val}</Text>
+                            {record.nik && (
+                                <div style={{ fontSize: '9px', color: '#8c8c8c', marginTop: '1px' }}>NIK: {record.nik}</div>
+                            )}
                         </div>
-                    )
+                    ),
+                    sorter: (a, b) => a.name.localeCompare(b.name),
                 },
                 {
-                    title: 'Total Point',
+                    title: <span style={{ fontSize: '11px' }}>CABANG</span>,
+                    dataIndex: 'cabang',
+                    key: 'cabang',
+                    width: 130,
+                    align: 'center',
+                    responsive: ['sm'],
+                    render: (val) => <Text style={{ fontSize: '12px' }}>{val}</Text>
+                },
+                {
+                    title: <span style={{ fontSize: '11px' }}>TOTAL POIN</span>,
                     dataIndex: 'total_point',
                     key: 'total_point',
+                    width: 100,
                     align: 'center',
-                    render: (val) => <Tag color="blue" style={{ fontSize: '14px', padding: '4px 10px' }}>{val?.toLocaleString()}</Tag>,
-                    sorter: (a, b) => a.total_point - b.total_point
+                    render: (val) => <Tag color="blue" style={{ fontSize: '12px', padding: '2px 8px' }}>{val?.toLocaleString()}</Tag>,
+                    sorter: (a, b) => a.total_point - b.total_point,
+                    defaultSortOrder: 'descend',
                 },
                 {
-                    title: 'Reward',
+                    title: <span style={{ fontSize: '11px' }}>REWARD</span>,
                     dataIndex: 'reward',
                     key: 'reward',
+                    width: 100,
                     align: 'right',
+                    responsive: ['md'],
                     render: (val) => {
-                        const style = { fontWeight: 'bold' };
+                        const style = { fontWeight: 'bold', fontSize: '12px' };
                         if (val > 0) return <Text type="success" style={style}>+ {val.toLocaleString()}</Text>;
                         if (val < 0) return <Text type="danger" style={style}>{val.toLocaleString()}</Text>;
-                        return <Text type="secondary">-</Text>;
+                        return <Text type="secondary" style={{ fontSize: '12px' }}>-</Text>;
                     },
                     sorter: (a, b) => a.reward - b.reward
                 }
@@ -257,53 +281,60 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
         if (activeTab === 'bm') {
             return [
                 {
-                    title: 'Rank',
+                    title: <span style={{ whiteSpace: 'nowrap', fontSize: '11px' }}>RANK</span>,
                     dataIndex: 'rank',
                     key: 'rank',
-                    width: 70,
+                    width: 50,
+                    fixed: 'left',
                     align: 'center',
                     render: (rank) => {
-                        if (rank === 1) return <Badge count={<CrownOutlined style={{ color: '#FFD700' }} />} style={{ backgroundColor: 'transparent' }} />;
-                        if (rank === 2) return <Badge count={<CrownOutlined style={{ color: '#C0C0C0' }} />} style={{ backgroundColor: 'transparent' }} />;
-                        if (rank === 3) return <Badge count={<CrownOutlined style={{ color: '#CD7F32' }} />} style={{ backgroundColor: 'transparent' }} />;
-                        return <Tag color="default">#{rank}</Tag>;
-                    }
+                        if (rank === 1) return <Badge count={<CrownOutlined style={{ color: '#FFD700', fontSize: '14px' }} />} style={{ backgroundColor: 'transparent' }} />;
+                        if (rank === 2) return <Badge count={<CrownOutlined style={{ color: '#C0C0C0', fontSize: '14px' }} />} style={{ backgroundColor: 'transparent' }} />;
+                        if (rank === 3) return <Badge count={<CrownOutlined style={{ color: '#CD7F32', fontSize: '14px' }} />} style={{ backgroundColor: 'transparent' }} />;
+                        return <Tag color="default" style={{ fontSize: '11px', padding: '2px 6px' }}>#{rank}</Tag>;
+                    },
+                    sorter: (a, b) => a.rank - b.rank,
                 },
                 {
-                    title: 'Cabang',
+                    title: <span style={{ fontSize: '11px' }}>CABANG</span>,
                     dataIndex: 'cabang',
                     key: 'cabang',
-                    render: (val) => <Text strong>{val}</Text>
+                    width: 140,
+                    fixed: 'left',
+                    render: (val) => <Text strong style={{ fontSize: '11px' }}>{val}</Text>,
+                    sorter: (a, b) => a.cabang.localeCompare(b.cabang),
                 },
                 {
-                    title: 'Region',
+                    title: <span style={{ fontSize: '11px' }}>REGION</span>,
                     dataIndex: 'region',
                     key: 'region',
-                    render: (val, record) => (
-                        <div>
-                            <Text>{val}</Text>
-                            <div style={{ fontSize: '10px', color: '#8c8c8c' }}>{record.zona_bm}</div>
-                        </div>
-                    )
+                    width: 130,
+                    align: 'center',
+                    responsive: ['sm'],
+                    render: (val) => <Text style={{ fontSize: '12px' }}>{val}</Text>
                 },
                 {
-                    title: 'Total Point',
+                    title: <span style={{ fontSize: '11px' }}>TOTAL POIN</span>,
                     dataIndex: 'total_point',
                     key: 'total_point',
+                    width: 100,
                     align: 'center',
-                    render: (val) => <Tag color="blue" style={{ fontSize: '14px', padding: '4px 10px' }}>{val?.toLocaleString()}</Tag>,
-                    sorter: (a, b) => a.total_point - b.total_point
+                    render: (val) => <Tag color="blue" style={{ fontSize: '12px', padding: '2px 8px' }}>{val?.toLocaleString()}</Tag>,
+                    sorter: (a, b) => a.total_point - b.total_point,
+                    defaultSortOrder: 'descend',
                 },
                 {
-                    title: 'Reward',
+                    title: <span style={{ fontSize: '11px' }}>REWARD</span>,
                     dataIndex: 'reward',
                     key: 'reward',
+                    width: 100,
                     align: 'right',
+                    responsive: ['md'],
                     render: (val) => {
-                        const style = { fontWeight: 'bold' };
+                        const style = { fontWeight: 'bold', fontSize: '12px' };
                         if (val > 0) return <Text type="success" style={style}>+ {val.toLocaleString()}</Text>;
                         if (val < 0) return <Text type="danger" style={style}>{val.toLocaleString()}</Text>;
-                        return <Text type="secondary">-</Text>;
+                        return <Text type="secondary" style={{ fontSize: '12px' }}>-</Text>;
                     },
                     sorter: (a, b) => a.reward - b.reward
                 }
@@ -313,42 +344,51 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
         if (activeTab === 'rbm') {
             return [
                 {
-                    title: 'Rank',
+                    title: <span style={{ whiteSpace: 'nowrap', fontSize: '11px' }}>RANK</span>,
                     dataIndex: 'rank',
                     key: 'rank',
-                    width: 70,
+                    width: 50,
+                    fixed: 'left',
                     align: 'center',
                     render: (rank) => {
-                        if (rank === 1) return <Badge count={<CrownOutlined style={{ color: '#FFD700' }} />} style={{ backgroundColor: 'transparent' }} />;
-                        if (rank === 2) return <Badge count={<CrownOutlined style={{ color: '#C0C0C0' }} />} style={{ backgroundColor: 'transparent' }} />;
-                        if (rank === 3) return <Badge count={<CrownOutlined style={{ color: '#CD7F32' }} />} style={{ backgroundColor: 'transparent' }} />;
-                        return <Tag color="default">#{rank}</Tag>;
-                    }
+                        if (rank === 1) return <Badge count={<CrownOutlined style={{ color: '#FFD700', fontSize: '14px' }} />} style={{ backgroundColor: 'transparent' }} />;
+                        if (rank === 2) return <Badge count={<CrownOutlined style={{ color: '#C0C0C0', fontSize: '14px' }} />} style={{ backgroundColor: 'transparent' }} />;
+                        if (rank === 3) return <Badge count={<CrownOutlined style={{ color: '#CD7F32', fontSize: '14px' }} />} style={{ backgroundColor: 'transparent' }} />;
+                        return <Tag color="default" style={{ fontSize: '11px', padding: '2px 6px' }}>#{rank}</Tag>;
+                    },
+                    sorter: (a, b) => a.rank - b.rank,
                 },
                 {
-                    title: 'Region',
+                    title: <span style={{ fontSize: '11px' }}>REGION</span>,
                     dataIndex: 'region',
                     key: 'region',
-                    render: (val) => <Text>{val}</Text>
+                    width: 100,
+                    fixed: 'left',
+                    render: (val) => <Text strong style={{ fontSize: '11px' }}>{val}</Text>,
+                    sorter: (a, b) => a.region.localeCompare(b.region),
                 },
                 {
-                    title: 'Total Point',
+                    title: <span style={{ fontSize: '11px' }}>TOTAL POIN</span>,
                     dataIndex: 'total_point',
                     key: 'total_point',
+                    width: 100,
                     align: 'center',
-                    render: (val) => <Tag color="blue" style={{ fontSize: '14px', padding: '4px 10px' }}>{val?.toLocaleString()}</Tag>,
-                    sorter: (a, b) => a.total_point - b.total_point
+                    render: (val) => <Tag color="blue" style={{ fontSize: '12px', padding: '2px 8px' }}>{val?.toLocaleString()}</Tag>,
+                    sorter: (a, b) => a.total_point - b.total_point,
+                    defaultSortOrder: 'descend',
                 },
                 {
-                    title: 'Reward',
+                    title: <span style={{ fontSize: '11px' }}>REWARD</span>,
                     dataIndex: 'reward',
                     key: 'reward',
+                    width: 100,
                     align: 'right',
+                    responsive: ['md'],
                     render: (val) => {
-                        const style = { fontWeight: 'bold' };
+                        const style = { fontWeight: 'bold', fontSize: '12px' };
                         if (val > 0) return <Text type="success" style={style}>+ {val.toLocaleString()}</Text>;
                         if (val < 0) return <Text type="danger" style={style}>{val.toLocaleString()}</Text>;
-                        return <Text type="secondary">-</Text>;
+                        return <Text type="secondary" style={{ fontSize: '12px' }}>-</Text>;
                     },
                     sorter: (a, b) => a.reward - b.reward
                 }
@@ -405,23 +445,24 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
     }, [activeTab]);
 
     const getPodiumStyle = (rank) => {
-        let height = '140px';
+        let height = '110px';
         let bg = '#f0f2f5';
         let border = 'none';
         let scale = '1';
         let zIndex = 1;
 
         if (rank === 1) {
-            height = '180px';
+            height = '130px';
             bg = 'linear-gradient(180deg, #fff1b8 0%, #fff 100%)';
             border = '2px solid #FFD700';
-            scale = '1.1';
+            scale = '1.05';
             zIndex = 2;
         } else if (rank === 2) {
-            height = '160px';
+            height = '120px';
             bg = 'linear-gradient(180deg, #e6f7ff 0%, #fff 100%)';
             border = '2px solid #C0C0C0';
         } else {
+            height = '110px';
             bg = 'linear-gradient(180deg, #fff7e6 0%, #fff 100%)';
             border = '2px solid #CD7F32';
         }
@@ -430,13 +471,13 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
             height,
             background: bg,
             border,
-            borderRadius: '12px',
+            borderRadius: '10px',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
-            padding: '16px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            padding: '10px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
             transform: `scale(${scale})`,
             zIndex,
             position: 'relative'
@@ -518,14 +559,26 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
                         ]}
                     />
 
-                    {/* Region/Zone Filter for ASS/BM */}
+                    {/* Region/Zone Filter for ASS/BM - Mobile Responsive */}
                     {activeTab === 'ass' && (
-                        <div style={{ margin: '16px 0', textAlign: 'right' }}>
-                            <span style={{ marginRight: '8px', color: '#595959' }}>Filter Region:</span>
+                        <div style={{ 
+                            margin: isMobile ? '12px 0' : '16px 0', 
+                            textAlign: isMobile ? 'left' : 'right',
+                            display: 'flex',
+                            flexDirection: isMobile ? 'column' : 'row',
+                            alignItems: isMobile ? 'stretch' : 'center',
+                            gap: isMobile ? '8px' : '8px'
+                        }}>
+                            <span style={{ 
+                                marginRight: isMobile ? 0 : '8px', 
+                                color: '#595959',
+                                fontWeight: 500,
+                                fontSize: isMobile ? '13px' : '14px'
+                            }}>Filter Region:</span>
                             <Select
                                 value={selectedRegion}
                                 onChange={setSelectedRegion}
-                                style={{ width: 200 }}
+                                style={{ width: isMobile ? '100%' : 200 }}
                                 disabled={user?.region !== 'ALL'}
                                 options={regions.map(r => ({ label: r || "N/A", value: r || "" }))}
                             />
@@ -535,12 +588,24 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
 
                     {
                         activeTab === 'bm' && (
-                            <div style={{ margin: '16px 0', textAlign: 'right' }}>
-                                <span style={{ marginRight: '8px', color: '#595959' }}>Filter Zona BM:</span>
+                            <div style={{ 
+                                margin: isMobile ? '12px 0' : '16px 0', 
+                                textAlign: isMobile ? 'left' : 'right',
+                                display: 'flex',
+                                flexDirection: isMobile ? 'column' : 'row',
+                                alignItems: isMobile ? 'stretch' : 'center',
+                                gap: isMobile ? '8px' : '8px'
+                            }}>
+                                <span style={{ 
+                                    marginRight: isMobile ? 0 : '8px', 
+                                    color: '#595959',
+                                    fontWeight: 500,
+                                    fontSize: isMobile ? '13px' : '14px'
+                                }}>Filter Zona BM:</span>
                                 <Select
                                     value={selectedZonaBM}
                                     onChange={setSelectedZonaBM}
-                                    style={{ width: 200 }}
+                                    style={{ width: isMobile ? '100%' : 200 }}
                                     disabled={user?.region !== 'ALL'}
                                     options={zonasBM.map(z => ({ label: z || "N/A", value: z || "" }))}
                                 />
@@ -550,12 +615,24 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
 
                     {
                         activeTab === 'rbm' && (
-                            <div style={{ margin: '16px 0', textAlign: 'right' }}>
-                                <span style={{ marginRight: '8px', color: '#595959' }}>Filter Zona RBM:</span>
+                            <div style={{ 
+                                margin: isMobile ? '12px 0' : '16px 0', 
+                                textAlign: isMobile ? 'left' : 'right',
+                                display: 'flex',
+                                flexDirection: isMobile ? 'column' : 'row',
+                                alignItems: isMobile ? 'stretch' : 'center',
+                                gap: isMobile ? '8px' : '8px'
+                            }}>
+                                <span style={{ 
+                                    marginRight: isMobile ? 0 : '8px', 
+                                    color: '#595959',
+                                    fontWeight: 500,
+                                    fontSize: isMobile ? '13px' : '14px'
+                                }}>Filter Zona RBM:</span>
                                 <Select
                                     value={selectedZonaRBM}
                                     onChange={setSelectedZonaRBM}
-                                    style={{ width: 200 }}
+                                    style={{ width: isMobile ? '100%' : 200 }}
                                     disabled={user?.region !== 'ALL'}
                                     options={zonasRBM.map(z => ({ label: z || "N/A", value: z || "" }))}
                                 />
@@ -564,54 +641,71 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
                     }
 
                     <Spin spinning={loading}>
-                        {/* Podium Section */}
+                        {/* Podium Section - Responsive & Compact */}
                         {top3.length > 0 && (
                             <div style={{
                                 display: 'flex',
+                                flexDirection: isMobile ? 'column' : 'row',
                                 justifyContent: 'center',
-                                alignItems: 'flex-end',
-                                height: '240px',
-                                gap: '24px',
-                                margin: '40px 0 60px 0'
+                                alignItems: isMobile ? 'center' : 'flex-end',
+                                height: isMobile ? 'auto' : '150px',
+                                gap: isMobile ? '12px' : '16px',
+                                margin: isMobile ? '16px 0 24px 0' : '24px 0 32px 0',
+                                padding: isMobile ? '0 8px' : '0'
                             }}>
                                 {/* Rank 2 */}
                                 {top3[1] && (
-                                    <div style={{ width: '220px', ...getPodiumStyle(2) }}>
-                                        <div style={{ position: 'absolute', top: '-15px', background: '#C0C0C0', color: '#fff', padding: '4px 12px', borderRadius: '20px', fontWeight: 'bold' }}>#2</div>
-                                        <Text strong style={{ fontSize: '16px', textAlign: 'center' }}>{top3[1].name}</Text>
-                                        <Text type="secondary" style={{ fontSize: '12px' }}>{top3[1].region}</Text>
-                                        <div style={{ marginTop: '12px', textAlign: 'center' }}>
-                                            <Statistic value={top3[1].total_point} valueStyle={{ fontSize: '20px', color: '#1f1f1f' }} suffix="pts" />
+                                    <div style={{ 
+                                        width: isMobile ? '100%' : '160px',
+                                        maxWidth: isMobile ? '240px' : '160px',
+                                        ...getPodiumStyle(2),
+                                        minHeight: isMobile ? '110px' : undefined
+                                    }}>
+                                        <div style={{ position: 'absolute', top: '-12px', background: '#C0C0C0', color: '#fff', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold', fontSize: '11px' }}>#2</div>
+                                        <Text strong style={{ fontSize: '13px', textAlign: 'center' }}>{top3[1].name}</Text>
+                                        <Text type="secondary" style={{ fontSize: '10px' }}>{top3[1].region}</Text>
+                                        <div style={{ marginTop: '6px', textAlign: 'center' }}>
+                                            <Statistic value={top3[1].total_point} valueStyle={{ fontSize: '16px', color: '#1f1f1f' }} suffix={<span style={{ fontSize: '11px' }}>pts</span>} />
                                         </div>
-                                        <Tag color="success" style={{ marginTop: '8px' }}>+ {top3[1].reward?.toLocaleString()}</Tag>
+                                        <Tag color="success" style={{ marginTop: '4px', fontSize: '11px', padding: '1px 6px' }}>+ {top3[1].reward?.toLocaleString()}</Tag>
                                     </div>
                                 )}
 
                                 {/* Rank 1 */}
                                 {top3[0] && (
-                                    <div style={{ width: '260px', ...getPodiumStyle(1) }}>
-                                        <div style={{ position: 'absolute', top: '-20px', background: '#FFD700', color: '#fff', padding: '6px 16px', borderRadius: '20px', fontWeight: 'bold', fontSize: '16px', boxShadow: '0 4px 8px rgba(255, 215, 0, 0.4)' }}>
-                                            <CrownOutlined /> #1
+                                    <div style={{ 
+                                        width: isMobile ? '100%' : '180px',
+                                        maxWidth: isMobile ? '260px' : '180px',
+                                        ...getPodiumStyle(1),
+                                        minHeight: isMobile ? '130px' : undefined
+                                    }}>
+                                        <div style={{ position: 'absolute', top: '-14px', background: '#FFD700', color: '#fff', padding: '3px 10px', borderRadius: '12px', fontWeight: 'bold', fontSize: '12px', boxShadow: '0 2px 6px rgba(255, 215, 0, 0.4)' }}>
+                                            <CrownOutlined style={{ fontSize: '12px' }} /> #1
                                         </div>
-                                        <Text strong style={{ fontSize: '20px', textAlign: 'center', marginTop: '12px' }}>{top3[0].name}</Text>
-                                        <Text type="secondary" style={{ fontSize: '13px' }}>{top3[0].region}</Text>
-                                        <div style={{ marginTop: '16px', textAlign: 'center' }}>
-                                            <Statistic value={top3[0].total_point} valueStyle={{ fontSize: '28px', color: '#cf1322', fontWeight: 'bold' }} suffix="pts" />
+                                        <Text strong style={{ fontSize: '14px', textAlign: 'center', marginTop: '6px' }}>{top3[0].name}</Text>
+                                        <Text type="secondary" style={{ fontSize: '10px' }}>{top3[0].region}</Text>
+                                        <div style={{ marginTop: '8px', textAlign: 'center' }}>
+                                            <Statistic value={top3[0].total_point} valueStyle={{ fontSize: '20px', color: '#cf1322', fontWeight: 'bold' }} suffix={<span style={{ fontSize: '12px' }}>pts</span>} />
                                         </div>
-                                        <Tag color="gold" style={{ marginTop: '12px', padding: '4px 12px', fontSize: '14px' }}>🏆 + {top3[0].reward?.toLocaleString()}</Tag>
+                                        <Tag color="gold" style={{ marginTop: '6px', padding: '2px 8px', fontSize: '11px' }}>🏆 + {top3[0].reward?.toLocaleString()}</Tag>
                                     </div>
                                 )}
 
                                 {/* Rank 3 */}
                                 {top3[2] && (
-                                    <div style={{ width: '220px', ...getPodiumStyle(3) }}>
-                                        <div style={{ position: 'absolute', top: '-15px', background: '#CD7F32', color: '#fff', padding: '4px 12px', borderRadius: '20px', fontWeight: 'bold' }}>#3</div>
-                                        <Text strong style={{ fontSize: '16px', textAlign: 'center' }}>{top3[2].name}</Text>
-                                        <Text type="secondary" style={{ fontSize: '12px' }}>{top3[2].region}</Text>
-                                        <div style={{ marginTop: '12px', textAlign: 'center' }}>
-                                            <Statistic value={top3[2].total_point} valueStyle={{ fontSize: '20px', color: '#1f1f1f' }} suffix="pts" />
+                                    <div style={{ 
+                                        width: isMobile ? '100%' : '160px',
+                                        maxWidth: isMobile ? '240px' : '160px',
+                                        ...getPodiumStyle(3),
+                                        minHeight: isMobile ? '110px' : undefined
+                                    }}>
+                                        <div style={{ position: 'absolute', top: '-12px', background: '#CD7F32', color: '#fff', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold', fontSize: '11px' }}>#3</div>
+                                        <Text strong style={{ fontSize: '13px', textAlign: 'center' }}>{top3[2].name}</Text>
+                                        <Text type="secondary" style={{ fontSize: '10px' }}>{top3[2].region}</Text>
+                                        <div style={{ marginTop: '6px', textAlign: 'center' }}>
+                                            <Statistic value={top3[2].total_point} valueStyle={{ fontSize: '16px', color: '#1f1f1f' }} suffix={<span style={{ fontSize: '11px' }}>pts</span>} />
                                         </div>
-                                        <Tag color="success" style={{ marginTop: '8px' }}>+ {top3[2].reward?.toLocaleString()}</Tag>
+                                        <Tag color="success" style={{ marginTop: '4px', fontSize: '11px', padding: '1px 6px' }}>+ {top3[2].reward?.toLocaleString()}</Tag>
                                     </div>
                                 )}
                             </div>
@@ -619,20 +713,51 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
 
                         {top3.length === 0 && !loading && <Empty description="No data found for this category" />}
 
-                        {/* Full Table */}
+                        {/* Full Table - Exact pattern from Leaderboard */}
                         <Table
                             dataSource={filteredData}
                             columns={columns}
-                            pagination={{ pageSize: 50 }}
+                            rowKey={(record, index) => record.key || `${record.name}_${record.rank}_${index}`}
+                            pagination={{ 
+                                pageSize: 20,
+                                showSizeChanger: true,
+                                showTotal: (total) => `Total ${total} entries`,
+                                pageSizeOptions: ['10', '20', '50', '100']
+                            }}
                             className="competition-table"
+                            scroll={{ x: 800 }}
+                            size="small"
+                            bordered
 
-                            // Expandable Row for Detail Breakdown
+                            // Expandable Row for Detail Breakdown - Compact expand icon
                             expandable={{
+                                columnWidth: isMobile ? 28 : (activeTab === 'rbm' ? 28 : 36), // Smaller for RBM
+                                expandIcon: ({ expanded, onExpand, record }) => {
+                                    const isRBM = activeTab === 'rbm';
+                                    return (
+                                        <span 
+                                            onClick={e => onExpand(record, e)} 
+                                            style={{ 
+                                                cursor: 'pointer', 
+                                                color: expanded ? '#1890ff' : '#999',
+                                                fontSize: isMobile ? '11px' : (isRBM ? '11px' : '13px'),
+                                                padding: '0 2px',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                width: isMobile ? '20px' : (isRBM ? '20px' : '24px'),
+                                                height: isMobile ? '20px' : (isRBM ? '20px' : '24px')
+                                            }}
+                                        >
+                                            {expanded ? '▼' : '▶'}
+                                        </span>
+                                    );
+                                },
                                 expandedRowRender: (record) => (
-                                    <div style={{ padding: '16px', background: '#fafafa', borderRadius: '8px' }}>
-                                        <h4 style={{ margin: '0 0 12px 0', color: '#1890ff' }}>Point Breakdown Calculation</h4>
-                                        <Row gutter={[24, 24]}>
-                                            <Col span={8}>
+                                    <div style={{ padding: isMobile ? '12px' : '16px', background: '#fafafa', borderRadius: '8px' }}>
+                                        <h4 style={{ margin: '0 0 12px 0', color: '#1890ff', fontSize: isMobile ? '14px' : '16px' }}>Point Breakdown Calculation</h4>
+                                        <Row gutter={isMobile ? [12, 12] : [24, 24]}>
+                                            <Col span={isMobile ? 24 : 8}>
                                                 <Card size="small" title="Omset Point" variant="borderless">
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                                                         <Text type="secondary">Target:</Text>
@@ -654,7 +779,7 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
                                                     </div>
                                                 </Card>
                                             </Col>
-                                            <Col span={8}>
+                                            <Col span={isMobile ? 24 : 8}>
                                                 <Card size="small" title="ROA Point" variant="borderless">
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                                                         <Text type="secondary">CB:</Text>
@@ -674,7 +799,7 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
                                                     </div>
                                                 </Card>
                                             </Col>
-                                            <Col span={8}>
+                                            <Col span={isMobile ? 24 : 8}>
                                                 <Card size="small" title="ROA 10 Krt Point" variant="borderless">
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                                                         <Text type="secondary">Total ROA 10 Krt:</Text>
@@ -931,33 +1056,55 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
                         virtual
                         scroll={{ y: 600, x: 1200 }}
                         expandable={{
+                            columnWidth: isMobile ? 28 : (activeTab === 'rbm' ? 28 : 36), // Smaller for RBM
+                            expandIcon: ({ expanded, onExpand, record }) => {
+                                const isRBM = activeTab === 'rbm';
+                                return (
+                                    <span 
+                                        onClick={e => onExpand(record, e)} 
+                                        style={{ 
+                                            cursor: 'pointer', 
+                                            color: expanded ? '#1890ff' : '#999',
+                                            fontSize: isMobile ? '11px' : (isRBM ? '11px' : '13px'),
+                                            padding: '0 2px',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            width: isMobile ? '20px' : (isRBM ? '20px' : '24px'),
+                                            height: isMobile ? '20px' : (isRBM ? '20px' : '24px')
+                                        }}
+                                    >
+                                        {expanded ? '▼' : '▶'}
+                                    </span>
+                                );
+                            },
                             expandedRowRender: (record) => (
-                                <div style={{ padding: '16px', background: '#fafafa', borderRadius: '8px' }}>
-                                    <h4 style={{ margin: '0 0 12px 0', color: '#1890ff' }}>Point Breakdown Calculation</h4>
-                                    <Row gutter={[24, 24]}>
-                                        <Col span={8}>
-                                            <Card size="small" title="Omset Point" variant="borderless">
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                                    <Text type="secondary">Target:</Text>
-                                                    <Text>{record.target?.toLocaleString()}</Text>
-                                                </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                                    <Text type="secondary">Omset:</Text>
-                                                    <Text strong>{record.omset?.toLocaleString()}</Text>
-                                                </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                                    <Text type="secondary">Achievement:</Text>
-                                                    <Text strong style={{ color: record.omset_ach >= 100 ? '#3f8600' : '#cf1322' }}>
-                                                        {record.omset_ach?.toFixed(2)}%
-                                                    </Text>
-                                                </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f0f0f0' }}>
-                                                    <Text type="secondary">Points:</Text>
-                                                    <Tag color="geekblue" style={{ fontSize: '14px' }}>+{record.point_oms}</Tag>
-                                                </div>
-                                            </Card>
-                                        </Col>
-                                        <Col span={8}>
+                                <div style={{ padding: isMobile ? '12px' : '16px', background: '#fafafa', borderRadius: '8px' }}>
+                                    <h4 style={{ margin: '0 0 12px 0', color: '#1890ff', fontSize: isMobile ? '14px' : '16px' }}>Point Breakdown Calculation</h4>
+                                    <Row gutter={isMobile ? [12, 12] : [24, 24]}>
+                                            <Col span={isMobile ? 24 : 8}>
+                                                <Card size="small" title="Omset Point" variant="borderless">
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                        <Text type="secondary">Target:</Text>
+                                                        <Text>{record.target?.toLocaleString()}</Text>
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                        <Text type="secondary">Omset:</Text>
+                                                        <Text strong>{record.omset?.toLocaleString()}</Text>
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                        <Text type="secondary">Achievement:</Text>
+                                                        <Text strong style={{ color: record.omset_ach >= 100 ? '#3f8600' : '#cf1322' }}>
+                                                            {record.omset_ach?.toFixed(2)}%
+                                                        </Text>
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f0f0f0' }}>
+                                                        <Text type="secondary">Points:</Text>
+                                                        <Tag color="geekblue" style={{ fontSize: '14px' }}>+{record.point_oms}</Tag>
+                                                    </div>
+                                                </Card>
+                                            </Col>
+                                            <Col span={isMobile ? 24 : 8}>
                                             <Card size="small" title="ROA Point" variant="borderless">
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                                                     <Text type="secondary">CB:</Text>
