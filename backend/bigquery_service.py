@@ -44,27 +44,41 @@ class BigQueryService:
             logger.error(f"Failed to initialize BigQuery Client: {e}")
             self.client = None
         
-        # Configuration - NO HARDCODED DEFAULTS
-        # All values must be set via environment variables
+        # Configuration
         self.project_id = os.getenv('BIGQUERY_PROJECT_ID', '').strip()
         self.dataset = os.getenv('BIGQUERY_DATASET', '').strip()
-        # Main table for leaderboard (other tables are configured in competition_config.py)
-        self.table = os.getenv('BIGQUERY_TABLE', '').strip()
         
-        # Validate all required values are set - NO DEFAULTS ALLOWED
+        # Main table from config file (can be overridden via env var if needed)
+        from competition_config import MAIN_LEADERBOARD_TABLE
+        env_table = os.getenv('BIGQUERY_TABLE', '').strip()
+        if env_table:
+            # Use env var if provided (for override)
+            self.table = env_table
+        elif MAIN_LEADERBOARD_TABLE:
+            # Use config file default
+            self.table = MAIN_LEADERBOARD_TABLE
+        else:
+            # No table configured
+            self.table = None
+        
+        # Validate project and dataset (required)
         if not self.project_id:
             logger.error("BIGQUERY_PROJECT_ID is not set")
             raise ValueError("BIGQUERY_PROJECT_ID environment variable is required. Please set it in your deployment configuration.")
         if not self.dataset:
             logger.error("BIGQUERY_DATASET is not set")
             raise ValueError("BIGQUERY_DATASET environment variable is required. Please set it in your deployment configuration.")
-        if not self.table:
-            logger.error("BIGQUERY_TABLE is not set")
-            raise ValueError("BIGQUERY_TABLE environment variable is required. This is the main leaderboard table. Competition tables are configured separately in competition_config.py.")
         
-        self.full_table_id = f"`{self.project_id}.{self.dataset}.{self.table}`"
-        logger.info(f"BigQuery configured: Project={self.project_id}, Dataset={self.dataset}, Main Table={self.table}")
-        logger.info(f"Note: Competition tables (rank_ass, rank_bm, rank_rbm) are configured in competition_config.py and use the same dataset.")
+        # Main table is optional - app can run without it
+        if not self.table:
+            logger.warning("Main leaderboard table not configured. Main leaderboard features will be disabled.")
+            logger.info("To enable: Set MAIN_LEADERBOARD_TABLE in competition_config.py or set BIGQUERY_TABLE environment variable.")
+            self.table = None
+            self.full_table_id = None
+        else:
+            self.full_table_id = f"`{self.project_id}.{self.dataset}.{self.table}`"
+            logger.info(f"BigQuery configured: Project={self.project_id}, Dataset={self.dataset}, Main Table={self.table}")
+            logger.info(f"Note: Competition tables (rank_ass, rank_bm, rank_rbm) are configured in competition_config.py and use the same dataset.")
     
     def _apply_region_filter(self, region: str) -> str:
         """
@@ -98,6 +112,11 @@ class BigQueryService:
         Returns:
             DataFrame with salesman ranking and performance metrics
         """
+        # Check if main table is configured
+        if not self.full_table_id:
+            logger.warning("Main leaderboard table not configured. Returning empty data.")
+            return pd.DataFrame()
+        
         # Build WHERE clause
         where_clauses = []
         
@@ -183,12 +202,15 @@ class BigQueryService:
         try:
             if not self.client:
                 raise Exception("BigQuery client is not initialized")
-            if not self.full_table_id:
-                raise Exception(f"BigQuery table not configured. project_id={self.project_id}, dataset={self.dataset}, table={self.table}")
             
             df = self.client.query(query).to_dataframe()
             return df
         except Exception as e:
+            error_msg = str(e)
+            # Check if table doesn't exist
+            if "not found" in error_msg.lower() or "does not exist" in error_msg.lower():
+                logger.warning(f"Table {self.full_table_id} does not exist. Returning empty DataFrame.")
+                return pd.DataFrame()  # Return empty DataFrame instead of crashing
             logger.error(f"Error fetching leaderboard: {e}")
             logger.error(f"Query was: {query[:200]}...")
             raise
@@ -203,6 +225,20 @@ class BigQueryService:
         Returns:
             Dictionary with KPI metrics
         """
+        # Check if main table is configured
+        if not self.full_table_id:
+            logger.warning("Main leaderboard table not configured. Returning empty KPIs.")
+            return {
+                "total_revenue": 0,
+                "total_target": 0,
+                "achievement_rate": 0,
+                "growth_rate": 0,
+                "total_salesman": 0,
+                "avg_customer_base": 0,
+                "avg_roa": 0,
+                "forecast": 0
+            }
+        
         region_filter = self._apply_region_filter(region)
         
         query = f"""
@@ -249,7 +285,21 @@ class BigQueryService:
                 "avg_roa": float(row['avg_roa']) if pd.notna(row['avg_roa']) else 0
             }
         except Exception as e:
-            print(f"Error fetching KPIs: {e}")
+            error_msg = str(e)
+            # Check if table doesn't exist
+            if "not found" in error_msg.lower() or "does not exist" in error_msg.lower():
+                logger.warning(f"Table {self.full_table_id} does not exist. Returning empty KPIs.")
+                return {
+                    "total_revenue": 0,
+                    "total_target": 0,
+                    "achievement_rate": 0,
+                    "growth_rate": 0,
+                    "total_salesman": 0,
+                    "avg_customer_base": 0,
+                    "avg_roa": 0,
+                    "forecast": 0
+                }
+            logger.error(f"Error fetching KPIs: {e}", exc_info=True)
             raise
     
     def get_sales_trend(self, region: str) -> pd.DataFrame:
@@ -262,6 +312,11 @@ class BigQueryService:
         Returns:
             DataFrame with period-based sales data
         """
+        # Check if main table is configured
+        if not self.full_table_id:
+            logger.warning("Main leaderboard table not configured. Returning empty sales trend.")
+            return pd.DataFrame()
+        
         region_filter = self._apply_region_filter(region)
         
         query = f"""
@@ -351,6 +406,11 @@ class BigQueryService:
         Returns:
             DataFrame with regional performance comparison
         """
+        # Check if main table is configured
+        if not self.full_table_id:
+            logger.warning("Main leaderboard table not configured. Returning empty region comparison.")
+            return pd.DataFrame()
+        
         query = f"""
         SELECT 
             region,
@@ -403,6 +463,11 @@ class BigQueryService:
         Returns:
             List of division codes
         """
+        # Check if main table is configured
+        if not self.full_table_id:
+            logger.warning("Main leaderboard table not configured. Returning empty divisions list.")
+            return []
+        
         region_filter = self._apply_region_filter(region)
         
         query = f"""

@@ -8,6 +8,11 @@ To disable a competition or table:
 - Or set table name to None to disable specific level
 """
 
+# Main leaderboard table configuration
+# Set to None to disable main leaderboard features
+# Change this when competition/period changes
+MAIN_LEADERBOARD_TABLE = "FINAL_SCORECARD_RANKED"
+
 COMPETITIONS = {
     "amo_jan_2026": {
         "title": "MONITORING KOMPETISI AMO",
