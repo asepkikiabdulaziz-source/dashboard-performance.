@@ -6,7 +6,7 @@ on:
       - main  # Triggered every time you push to 'main' branch
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  PROJECT_ID: myproject-482315
   SERVICE_NAME: dashboard-performance
   REGION: asia-southeast2
   REPOSITORY: dashboard-repo # Nama repository yang akan dibuat di Artifact Registry
