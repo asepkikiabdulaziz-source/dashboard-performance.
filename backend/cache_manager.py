@@ -174,7 +174,24 @@ class LeaderboardCache:
             data = self._all_data
         
         if not data:
-            return self.bigquery_service.get_kpis(region)
+            # Fallback to BigQuery if cache is empty
+            if not self.bigquery_service:
+                logger.warning("BigQuery service not available, returning empty KPIs")
+                return {
+                    "total_revenue": 0, "total_target": 0, "achievement_rate": 0,
+                    "growth_rate": 0, "forecast": 0, "total_salesman": 0,
+                    "avg_customer_base": 0, "avg_roa": 0
+                }
+            try:
+                return self.bigquery_service.get_kpis(region)
+            except Exception as e:
+                logger.error(f"Error fetching KPIs from BigQuery: {e}", exc_info=True)
+                # Return empty KPIs instead of crashing
+                return {
+                    "total_revenue": 0, "total_target": 0, "achievement_rate": 0,
+                    "growth_rate": 0, "forecast": 0, "total_salesman": 0,
+                    "avg_customer_base": 0, "avg_roa": 0
+                }
             
         filtered = data if region == "ALL" else [r for r in data if r.get('region') == region]
         

@@ -188,6 +188,8 @@ try:
     logger.info("✅ BigQuery Service initialized")
 except Exception as e:
     logger.error(f"⚠️ Failed to initialize BigQuery Service: {e}", exc_info=True)
+    logger.warning("⚠️ Application will run with limited functionality (no BigQuery data)")
+    bigquery_service = None
 
 # Include admin routes
 app.include_router(admin_router)
@@ -213,10 +215,15 @@ async def startup_event():
     # Initialize leaderboard cache
     logger.info("🚀 Initializing smart cache system...")
     try:
-        cache_manager = LeaderboardCache(bigquery_service)
-        logger.info("✅ Cache initialized (background loading started)")
+        if bigquery_service:
+            cache_manager = LeaderboardCache(bigquery_service)
+            logger.info("✅ Cache initialized (background loading started)")
+        else:
+            logger.warning("⚠️ Cache not initialized - BigQuery service unavailable")
+            cache_manager = None
     except Exception as e:
         logger.error(f"❌ Failed to initialize cache: {e}", exc_info=True)
+        cache_manager = None
     
     # Pre-load zone mappings for common regions (background)
     try:
@@ -330,7 +337,21 @@ async def get_kpis(user_region: str = Depends(get_user_region)):
     
     **Authentication Required:** Yes
     """
-    return cache_manager.get_kpis_cached(user_region)
+    try:
+        if not cache_manager:
+            raise HTTPException(
+                status_code=503,
+                detail="Cache manager not initialized. Please check BigQuery configuration."
+            )
+        return cache_manager.get_kpis_cached(user_region)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching KPIs for region {user_region}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching KPIs: {str(e)}"
+        )
 
 
 @app.get("/api/dashboard/top-products")
