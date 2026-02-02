@@ -44,15 +44,18 @@ class BigQueryService:
             logger.error(f"Failed to initialize BigQuery Client: {e}")
             self.client = None
         
-        # Configuration
-        self.project_id = os.getenv('BIGQUERY_PROJECT_ID', 'myproject-482315')
-        self.dataset = os.getenv('BIGQUERY_DATASET', 'pma')
-        self.table = os.getenv('BIGQUERY_TABLE', 'FINAL_SCORECARD_RANKED')
+        # Configuration with validation
+        self.project_id = os.getenv('BIGQUERY_PROJECT_ID', 'myproject-482315') or 'myproject-482315'
+        self.dataset = os.getenv('BIGQUERY_DATASET', 'pma') or 'pma'
+        self.table = os.getenv('BIGQUERY_TABLE', 'FINAL_SCORECARD_RANKED') or 'FINAL_SCORECARD_RANKED'
         
-        if self.project_id and self.dataset and self.table:
-            self.full_table_id = f"`{self.project_id}.{self.dataset}.{self.table}`"
-        else:
-            self.full_table_id = None
+        # Validate all required values are set
+        if not self.project_id or not self.dataset or not self.table:
+            logger.error(f"BigQuery configuration incomplete: project_id={self.project_id}, dataset={self.dataset}, table={self.table}")
+            raise ValueError("BigQuery configuration is incomplete. Please set BIGQUERY_PROJECT_ID, BIGQUERY_DATASET, and BIGQUERY_TABLE environment variables.")
+        
+        self.full_table_id = f"`{self.project_id}.{self.dataset}.{self.table}`"
+        logger.info(f"BigQuery configured: {self.full_table_id}")
     
     def _apply_region_filter(self, region: str) -> str:
         """
@@ -169,10 +172,16 @@ class BigQueryService:
         """
         
         try:
+            if not self.client:
+                raise Exception("BigQuery client is not initialized")
+            if not self.full_table_id:
+                raise Exception(f"BigQuery table not configured. project_id={self.project_id}, dataset={self.dataset}, table={self.table}")
+            
             df = self.client.query(query).to_dataframe()
             return df
         except Exception as e:
-            print(f"Error fetching leaderboard: {e}")
+            logger.error(f"Error fetching leaderboard: {e}")
+            logger.error(f"Query was: {query[:200]}...")
             raise
     
     def get_kpis(self, region: str) -> Dict[str, Any]:

@@ -47,8 +47,14 @@ class LeaderboardCache:
             cutoff_date = self.bigquery_service.get_cutoff_date()
             
             # Fetch normal leaderboard
-            all_data_df = self.bigquery_service.get_leaderboard(region="ALL")
-            all_data = all_data_df.to_dict(orient='records')
+            try:
+                all_data_df = self.bigquery_service.get_leaderboard(region="ALL")
+                all_data = all_data_df.to_dict(orient='records')
+            except Exception as e:
+                logger.error(f"[CACHE] Failed to fetch leaderboard: {e}")
+                # Use empty data instead of crashing
+                all_data = []
+                logger.warning("[CACHE] Using empty leaderboard data due to BigQuery error")
             
             # Fetch AMO Competition data (ASS, BM, RBM)
             comp_data = {}
