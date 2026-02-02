@@ -4,9 +4,13 @@ from models import Product, ProductCreate, ProductUpdate, CSVUploadResponse, Bul
 from supabase_client import supabase_request
 from auth import get_current_user
 from rbac import require_permission
+from csv_validator import CSVValidator
+from logger import get_logger
 import csv
 import io
 import math
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -82,8 +86,12 @@ async def get_products(
             "page": page,
             "pageSize": page_size
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        logger.error(f"Error fetching products: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch products: {str(e)}")
 
 
 @router.get("/products/categories", response_model=List[CategoryResponse])
@@ -95,8 +103,12 @@ async def get_categories(
     try:
         res = supabase_request('GET', 'ref_categories', params={'order': 'name.asc'}, headers_extra=HEADERS_MASTER)
         return res.get('data', [])
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        logger.error(f"Error fetching categories: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch categories: {str(e)}")
 
 
 @router.get("/products/principals", response_model=List[dict])
@@ -108,8 +120,12 @@ async def get_principals(
     try:
         res = supabase_request('GET', 'ref_principals', params={'order': 'id.asc'}, headers_extra=HEADERS_MASTER)
         return res.get('data', [])
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        logger.error(f"Error fetching principals: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch principals: {str(e)}")
 
 
 @router.get("/products/brands", response_model=List[dict])
@@ -121,8 +137,12 @@ async def get_brands(
     try:
         res = supabase_request('GET', 'ref_brands', params={'order': 'name.asc'}, headers_extra=HEADERS_MASTER)
         return res.get('data', [])
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        logger.error(f"Error fetching brands: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch brands: {str(e)}")
 
 
 @router.get("/products/companies", response_model=List[dict])
@@ -134,8 +154,12 @@ async def get_companies(
     try:
         res = supabase_request('GET', 'ref_companies', params={'order': 'name.asc'}, headers_extra=HEADERS_MASTER)
         return res.get('data', [])
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        logger.error(f"Error fetching companies: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch companies: {str(e)}")
 
 
 @router.get("/products/{sku_code}", response_model=Product)
@@ -284,12 +308,15 @@ async def validate_csv(
         raise HTTPException(status_code=400, detail="Invalid CSV encoding. Please use UTF-8")
     
     # Validate CSV
-    validator = CSVValidator()
-    valid_rows, errors = validator.validate_csv(csv_content)
-    
-    summary = validator.get_summary()
-    
-    return CSVUploadResponse(**summary)
+    try:
+        validator = CSVValidator()
+        valid_rows, errors = validator.validate_csv(csv_content)
+        
+        summary = validator.get_summary()
+        
+        return CSVUploadResponse(**summary)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"CSV validation error: {str(e)}")
 
 
 @router.post("/products/upload-csv/import")
@@ -306,7 +333,6 @@ async def import_csv(
     content = await file.read()
     csv_content = content.decode('utf-8')
     
-    from csv_validator import CSVValidator
     validator = CSVValidator()
     valid_rows, _ = validator.validate_csv(csv_content)
     

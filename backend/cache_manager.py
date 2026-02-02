@@ -37,7 +37,7 @@ class LeaderboardCache:
     def _refresh_cache(self):
         """Reload all data from BigQuery with minimal lock hold time"""
         try:
-            print("🔄 [CACHE] Starting refresh from BigQuery...")
+            logger.info("[CACHE] Starting refresh from BigQuery...")
             start_time = datetime.now()
             
             if not self.bigquery_service:
@@ -55,7 +55,7 @@ class LeaderboardCache:
             from competition_config import COMPETITIONS
             for comp_id in COMPETITIONS:
                 for level in ['ass', 'bm', 'rbm']:
-                    print(f"🔍 [CACHE] Pre-loading {comp_id} level {level}...")
+                    logger.debug(f"[CACHE] Pre-loading {comp_id} level {level}...")
                     try:
                         data = self.bigquery_service.get_competition_ranks(
                             level=level,
@@ -64,7 +64,7 @@ class LeaderboardCache:
                         )
                         comp_data[f"{comp_id}_{level}"] = data
                     except Exception as ce:
-                        print(f"⚠️ [CACHE] Failed to pre-load {comp_id}_{level}: {ce}")
+                        logger.warning(f"[CACHE] Failed to pre-load {comp_id}_{level}: {ce}")
             
             # 2. Update status and data INSIDE lock
             with self._lock:
@@ -75,11 +75,11 @@ class LeaderboardCache:
                 self._last_error = None
             
             elapsed = (datetime.now() - start_time).total_seconds()
-            print(f"✅ [CACHE] REFRESHED: {len(all_data)} leaderboard + {len(comp_data)} comp levels in {elapsed:.2f}s")
+            logger.info(f"[CACHE] REFRESHED: {len(all_data)} leaderboard + {len(comp_data)} comp levels in {elapsed:.2f}s")
             
         except Exception as e:
             error_msg = str(e)
-            print(f"❌ [CACHE] FATAL ERROR during refresh: {error_msg}")
+            logger.error(f"[CACHE] FATAL ERROR during refresh: {error_msg}")
             with self._lock:
                 self._last_error = error_msg
             import traceback

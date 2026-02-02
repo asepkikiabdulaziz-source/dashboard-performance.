@@ -2,6 +2,7 @@
 import os
 from supabase import create_client, Client
 from dotenv import load_dotenv
+from logger import get_logger
 
 # Load environment variables
 load_dotenv()

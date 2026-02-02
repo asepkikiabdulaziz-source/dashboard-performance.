@@ -7,6 +7,9 @@ from google.cloud import bigquery
 import pandas as pd
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class BigQueryService:
@@ -23,22 +26,22 @@ class BigQueryService:
         # Only set override if file exists locally
         if credentials_path and os.path.exists(credentials_path):
             os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
-            print(f"🔑 Using credentials from {credentials_path}")
+            logger.info(f"Using credentials from {credentials_path}")
         else:
             # IMPORTANT: If file doesn't exist, we must UNSET the env var
             # otherwise the BQ client will try to find a missing file and CRASH
             if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
-                print(f"☁️ Credentials file '{credentials_path}' not found. Unsetting GOOGLE_APPLICATION_CREDENTIALS to use ADC (Cloud Run Identity).")
+                logger.info(f"Credentials file '{credentials_path}' not found. Unsetting GOOGLE_APPLICATION_CREDENTIALS to use ADC (Cloud Run Identity).")
                 del os.environ['GOOGLE_APPLICATION_CREDENTIALS']
             else:
-                print("☁️ Credentials file not found, using environment default identity (ADC)")
+                logger.info("Credentials file not found, using environment default identity (ADC)")
         
         # Initialize client with error handling
         try:
             self.client = bigquery.Client()
-            print("✅ BigQuery Client successfully initialized")
+            logger.info("BigQuery Client successfully initialized")
         except Exception as e:
-            print(f"❌ Failed to initialize BigQuery Client: {e}")
+            logger.error(f"Failed to initialize BigQuery Client: {e}")
             self.client = None
         
         # Configuration
