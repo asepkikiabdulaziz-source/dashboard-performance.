@@ -150,10 +150,11 @@ async def login(credentials: LoginRequest):
     user = authenticate_user(credentials.email, credentials.password)
     
     if not user:
-        logger.warning(f"Login failed for email: {credentials.email}")
+        # Log more details for debugging
+        logger.warning(f"Login failed for email: {credentials.email} - Check Supabase user exists and credentials are correct")
         raise HTTPException(
             status_code=401,
-            detail="Incorrect email or password",
+            detail="Incorrect email or password. Please verify your credentials or contact administrator if user does not exist.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
