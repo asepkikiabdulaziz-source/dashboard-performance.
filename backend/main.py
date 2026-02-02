@@ -191,8 +191,8 @@ async def get_forecast_data(user_region: str = Depends(get_user_region)):
 
 @app.get("/api/dashboard/kpis")
 async def get_kpis(user_region: str = Depends(get_user_region)):
-    """Get KPIs filtered by user's region"""
-    return data_generator.get_kpis(user_region)
+    """Get KPIs filtered by user's region (from high-speed cache)"""
+    return cache_manager.get_kpis_cached(user_region)
 
 
 @app.get("/api/dashboard/top-products")
@@ -275,9 +275,9 @@ async def get_top_performers_api(
     limit: int = 10,
     user_region: str = Depends(get_user_region)
 ):
-    """Get top performing salesman with RLS"""
+    """Get top performing salesman with RLS (from high-speed cache)"""
     try:
-        return bigquery_service.get_top_performers(user_region, limit)
+        return cache_manager.get_top_performers_cached(user_region, limit)
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -360,27 +360,14 @@ async def get_regions_api(current_user: Dict[str, Any] = Depends(get_current_use
 
 @app.get("/api/dashboard/kpis-bigquery")
 async def get_kpis_bigquery(user_region: str = Depends(get_user_region)):
-    """Get KPIs from BigQuery (real data)"""
-    try:
-        return bigquery_service.get_kpis(user_region)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error fetching KPIs: {str(e)}"
-        )
+    """Get KPIs from BigQuery (redirected to high-speed cache)"""
+    return cache_manager.get_kpis_cached(user_region)
 
 
 @app.get("/api/dashboard/sales-trend-bigquery")
 async def get_sales_trend_bigquery(user_region: str = Depends(get_user_region)):
-    """Get sales trend from BigQuery (P1-P4)"""
-    try:
-        df = bigquery_service.get_sales_trend(user_region)
-        return df.to_dict(orient='records')
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error fetching sales trend: {str(e)}"
-        )
+    """Get sales trend from BigQuery (redirected to high-speed cache)"""
+    return cache_manager.get_sales_trend_cached(user_region)
 
 
 @app.get("/api/dashboard/region-comparison-bigquery")
@@ -388,7 +375,7 @@ async def get_region_comparison_bigquery(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Get region comparison from BigQuery
+    Get region comparison from BigQuery (redirected to high-speed cache)
     Only available for admin users
     """
     if current_user["region"] != "ALL":
@@ -397,14 +384,7 @@ async def get_region_comparison_bigquery(
             detail="Only admin users can access region comparison"
         )
     
-    try:
-        df = bigquery_service.get_region_comparison()
-        return df.to_dict(orient='records')
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error fetching region comparison: {str(e)}"
-        )
+    return cache_manager.get_region_comparison_cached()
 
 
 

@@ -163,6 +163,99 @@ class LeaderboardCache:
         reg_data = [r for r in data if r.get('region') == region or region == "ALL"]
         return sorted(list(set(r.get('division') for r in reg_data if r.get('division'))))
 
+    def get_kpis_cached(self, region: str) -> Dict[str, Any]:
+        """Aggregate KPIs from memory"""
+        with self._lock:
+            data = self._all_data
+        
+        if not data:
+            return self.bigquery_service.get_kpis(region)
+            
+        filtered = data if region == "ALL" else [r for r in data if r.get('region') == region]
+        
+        if not filtered:
+            return {
+                "total_revenue": 0, "total_target": 0, "achievement_rate": 0,
+                "growth_rate": 0, "total_salesman": 0, "avg_customer_base": 0, "avg_roa": 0
+            }
+            
+        rev = sum(r.get('omset_p4', 0) or 0 for r in filtered)
+        prev_rev = sum(r.get('omset_p3', 0) or 0 for r in filtered)
+        target = sum(r.get('target', 0) or 0 for r in filtered)
+        
+        ach_rate = (rev / target * 100) if target > 0 else 0
+        growth = ((rev - prev_rev) / prev_rev * 100) if prev_rev > 0 else 0
+        forecast = rev * (1 + growth/100)
+        
+        return {
+            "total_revenue": rev,
+            "total_target": target,
+            "achievement_rate": round(ach_rate, 2),
+            "growth_rate": round(growth, 2),
+            "forecast": round(forecast, 2),
+            "total_salesman": len(filtered),
+            "avg_customer_base": sum(r.get('total_customer', 0) or 0 for r in filtered) / len(filtered),
+            "avg_roa": sum(r.get('roa_p4', 0) or 0 for r in filtered) / len(filtered)
+        }
+
+    def get_sales_trend_cached(self, region: str) -> List[Dict[str, Any]]:
+        """Aggregate sales trend from memory"""
+        with self._lock:
+            data = self._all_data
+            
+        if not data:
+            df = self.bigquery_service.get_sales_trend(region)
+            return df.to_dict(orient='records')
+            
+        filtered = data if region == "ALL" else [r for r in data if r.get('region') == region]
+        
+        trends = []
+        for p in range(1, 5):
+            p_key = f'omset_p{p}'
+            roa_key = f'roa_p{p}'
+            revenue = sum(r.get(p_key, 0) or 0 for r in filtered)
+            roa = sum(r.get(roa_key, 0) or 0 for r in filtered) / len(filtered) if filtered else 0
+            trends.append({
+                "period": f"Period {p}",
+                "total_sales": revenue,
+                "avg_roa": round(roa, 2),
+                "salesman_count": len(filtered)
+            })
+        return trends
+
+    def get_region_comparison_cached(self) -> List[Dict[str, Any]]:
+        """Aggregate region comparison from memory"""
+        with self._lock:
+            data = self._all_data
+            
+        if not data:
+            df = self.bigquery_service.get_region_comparison()
+            return df.to_dict(orient='records')
+            
+        regions = sorted(list(set(r.get('region') for r in data if r.get('region'))))
+        comparison = []
+        
+        for reg in regions:
+            reg_data = [r for r in data if r.get('region') == reg]
+            rev = sum(r.get('omset_p4', 0) or 0 for r in reg_data)
+            target = sum(r.get('target', 0) or 0 for r in reg_data)
+            ach = (rev / target * 100) if target > 0 else 0
+            
+            comparison.append({
+                "region": reg,
+                "total_revenue": rev,
+                "total_target": target,
+                "achievement_rate": round(ach, 2),
+                "salesman_count": len(reg_data)
+            })
+            
+        return sorted(comparison, key=lambda x: x['achievement_rate'], reverse=True)
+
+    def get_top_performers_cached(self, region: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get top performers from memory"""
+        data = self.get_leaderboard(region=region, limit=limit)
+        return data
+
     def get_cache_info(self) -> Dict[str, Any]:
         """Diagnostic info for /health"""
         with self._lock:
