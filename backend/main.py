@@ -133,6 +133,19 @@ async def login(credentials: LoginRequest):
     """
     Authenticate user and return JWT token
     """
+    import os
+    
+    # Check configuration first - give clear error if missing
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_KEY")
+    
+    if not supabase_url or not supabase_key:
+        logger.error(f"Configuration missing: SUPABASE_URL={'SET' if supabase_url else 'MISSING'}, SUPABASE_KEY={'SET' if supabase_key else 'MISSING'}")
+        raise HTTPException(
+            status_code=500,
+            detail="Server configuration error: Supabase credentials not configured",
+        )
+    
     logger.info(f"Login attempt for email: {credentials.email}")
     user = authenticate_user(credentials.email, credentials.password)
     
