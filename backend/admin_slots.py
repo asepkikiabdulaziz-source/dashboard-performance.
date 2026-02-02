@@ -517,6 +517,20 @@ async def assign_employee(
         res = supabase_request('POST', 'assignments', json_data=new_assign, headers_extra=headers_hr)
         
         print(f"[ASSIGN_EMPLOYEE] Success! Response: {res}")
+        
+        # Invalidate user cache after assignment change
+        try:
+            from user_context_cache import invalidate_user_context
+            # Get employee email from NIK
+            emp_res = supabase_request('GET', 'employees', params={'nik': f"eq.{req.nik}", 'select': 'email'}, headers_extra=headers_hr)
+            if emp_res.get('data') and emp_res['data'][0].get('email'):
+                email = emp_res['data'][0]['email']
+                invalidate_user_context(email)
+                print(f"[ASSIGN_EMPLOYEE] Cache invalidated for {email}")
+        except Exception as cache_err:
+            print(f"[ASSIGN_EMPLOYEE] Warning: Failed to invalidate cache: {cache_err}")
+            # Don't fail the assignment if cache invalidation fails
+        
         return {"message": "Assignment successful", "data": res.get('data')}
         
     except requests.exceptions.HTTPError as he:

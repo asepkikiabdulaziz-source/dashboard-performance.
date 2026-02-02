@@ -464,7 +464,7 @@ class BigQueryService:
         user_role_lower = role.lower()
         active_level_lower = level.lower()
         
-        is_admin = user_role_lower in ['super_admin', 'admin', 'master', 'head']
+        is_admin = user_role_lower in ['super_admin', 'admin', 'master']
         
         if not is_admin:
             if active_level_lower == 'rbm':
@@ -500,6 +500,8 @@ class BigQueryService:
             where_clause = "WHERE " + " AND ".join(where_clauses)
             
         # Determine columns based on level/config
+        # We try to use a smart fallback strategy
+        
         name_col = "CABANG"
         rank_col = "rank_ASS"
         
@@ -529,15 +531,18 @@ class BigQueryService:
                 
             # Normalize columns
             result = []
-            for i, row in df.iterrows():
+            for _, row in df.iterrows():
                 # Flexible name resolution
+                # For ASS, name_col is NAMA_ASS. Fallbacks for other levels.
                 name_val = row.get(name_col, row.get('ZONA_BM', row.get('ZONA_RBM', row.get('CABANG', 'Unknown'))))
                 
                 # Handles rank column variations 
                 rank_raw = row.get(rank_col)
-                # Fallback if specific rank col is missing
+                # Fallback if specific rank col is missing in older/different schemas
                 if pd.isna(rank_raw):
-                    rank_raw = row.get('rank_regional', row.get('rank_zona', 999))
+                     # Try alternative rank columns if primary missing
+                     rank_raw = row.get('rank_regional', row.get('rank_zona', 999))
+                     
                 rank_val = int(rank_raw) if pd.notna(rank_raw) else 999
                 
                 result.append({

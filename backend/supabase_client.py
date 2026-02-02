@@ -34,6 +34,7 @@ def get_supabase_admin() -> Client:
 
 # --- Fallback HTTP Client (Bypasses supabase-py/gotrue proxy bug) ---
 import requests
+from connection_pool import get_http_session
 
 def supabase_request(method, endpoint, params=None, json_data=None, headers_extra=None):
     """
@@ -54,11 +55,14 @@ def supabase_request(method, endpoint, params=None, json_data=None, headers_extr
     if headers_extra:
         headers.update(headers_extra)
         
-    print(f"[Supabase] {method} {base_url} | Params: {params} | JSON: {json_data}")
+    logger = get_logger("supabase_client")
+    logger.debug(f"[Supabase] {method} {base_url} | Params: {params} | JSON: {json_data}")
     try:
-        response = requests.request(method, base_url, params=params, json=json_data, headers=headers)
+        # Use pooled session for better performance
+        session = get_http_session()
+        response = session.request(method, base_url, params=params, json=json_data, headers=headers)
         if response.status_code >= 400:
-             print(f"[Supabase] ERROR {response.status_code}: {response.text}")
+             logger.warning(f"[Supabase] ERROR {response.status_code}: {response.text[:500]}")
         response.raise_for_status()
         
         # Handle count header
@@ -79,7 +83,7 @@ def supabase_request(method, endpoint, params=None, json_data=None, headers_extr
         return {"data": data, "count": count}
         
     except Exception as e:
-        print(f"Supabase HTTP Error: {e}")
+        logger.error(f"Supabase HTTP Error: {e}", exc_info=True)
         # Return empty structure to match supabase-pyish
         raise e
 
@@ -100,13 +104,15 @@ def supabase_auth_admin_request(method, endpoint, json_data=None):
         "Content-Type": "application/json"
     }
         
+    logger = get_logger("supabase_client")
     try:
-        response = requests.request(method, base_url, json=json_data, headers=headers)
+        session = get_http_session()
+        response = session.request(method, base_url, json=json_data, headers=headers)
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        print(f"Supabase Auth Admin Error: {e}")
+        logger.error(f"Supabase Auth Admin Error: {e}", exc_info=True)
         if hasattr(e, 'response') and e.response is not None:
-             print(f"Error Response: {e.response.text}")
+             logger.error(f"Error Response: {e.response.text[:500]}")
         raise e
 

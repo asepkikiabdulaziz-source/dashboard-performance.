@@ -2,6 +2,9 @@
 from fastapi import HTTPException, Depends
 from auth import get_current_user
 from supabase_client import get_supabase_client
+from logger import get_logger
+
+logger = get_logger("rbac")
 
 # Cache permissions to avoid hitting DB on every request (Basic In-Memory Cache)
 # In production, use Redis. For now: Global Dict with TTL or just simple cache.
@@ -12,9 +15,7 @@ def get_role_permissions(role_id: str) -> list:
     """
     Fetch permissions for a role from DB (with caching)
     """
-    if role_id in ROLE_PERMISSIONS_CACHE:
-        return ROLE_PERMISSIONS_CACHE[role_id]
-        
+    # Check cache first
     if role_id in ROLE_PERMISSIONS_CACHE:
         return ROLE_PERMISSIONS_CACHE[role_id]
         
@@ -35,7 +36,7 @@ def get_role_permissions(role_id: str) -> list:
         ROLE_PERMISSIONS_CACHE[role_id] = perms
         return perms
     except Exception as e:
-        print(f"Error fetching permissions (HTTP) for role {role_id}: {e}")
+        logger.error(f"Error fetching permissions (HTTP) for role {role_id}: {e}", exc_info=True)
         return []
 
 def require_permission(permission_code: str):
@@ -45,27 +46,27 @@ def require_permission(permission_code: str):
     def permission_checker(current_user: dict = Depends(get_current_user)):
         role_id = current_user.get('role')
         email = current_user.get('email', 'unknown')
-        print(f"[RBAC] Checking '{permission_code}' for user: {email} (role: {role_id})")
+        logger.debug(f"[RBAC] Checking '{permission_code}' for user: {email} (role: {role_id})")
         
         if not role_id:
-             print(f"[RBAC] REJECTED: User {email} has no role!")
+             logger.warning(f"[RBAC] REJECTED: User {email} has no role!")
              raise HTTPException(status_code=403, detail="User has no role")
              
         # Super Admin Bypass (Optimization)
         if role_id == 'super_admin' or role_id == 'SUPER_ADMIN':
-            print(f"[RBAC] BYPASS: Super Admin access granted for {email}")
+            logger.debug(f"[RBAC] BYPASS: Super Admin access granted for {email}")
             return True
 
         user_perms = get_role_permissions(role_id)
-        print(f"[RBAC] User permissions: {user_perms}")
+        logger.debug(f"[RBAC] User permissions: {user_perms}")
         
         if permission_code not in user_perms:
-            print(f"[RBAC] REJECTED: User {email} lacks '{permission_code}' permission")
+            logger.warning(f"[RBAC] REJECTED: User {email} lacks '{permission_code}' permission")
             raise HTTPException(
                 status_code=403, 
                 detail=f"Permission denied. Required: {permission_code}"
             )
-        print(f"[RBAC] GRANTED: Permission '{permission_code}' verified for {email}")
+        logger.debug(f"[RBAC] GRANTED: Permission '{permission_code}' verified for {email}")
         return True
         
     return permission_checker

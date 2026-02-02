@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy backend requirements and install
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
 # Copy backend source DIRECTLY to /app
 COPY backend/ .
@@ -41,5 +41,6 @@ ENV PYTHONPATH=/app
 EXPOSE 8080
 
 # Command to run the application
-# We are in /app, so main:app will work perfectly
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port $PORT"]
+# Use gunicorn for production (better for Cloud Run)
+# Fallback to uvicorn if gunicorn not available
+CMD ["sh", "-c", "if command -v gunicorn > /dev/null; then gunicorn main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300; else uvicorn main:app --host 0.0.0.0 --port $PORT; fi"]

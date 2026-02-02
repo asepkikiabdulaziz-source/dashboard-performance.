@@ -11,9 +11,17 @@ from typing import Optional, List, Dict, Any
 from datetime import timedelta
 from dotenv import load_dotenv
 import os
+import logging
 
 # FORCE LOAD ENV
 load_dotenv()
+
+# Load configuration
+from config import Config
+
+# Setup logging
+from logger import get_logger
+logger = get_logger("main")
 
 from auth import (
     authenticate_user,
@@ -28,16 +36,68 @@ from admin_routes import router as admin_router
 from admin_employees import router as admin_employees_router
 from admin_master import router as admin_master_router
 from admin_slots import router as admin_slots_router
+from admin_cache import router as admin_cache_router
 
-app = FastAPI(title="Professional Dashboard", version="1.0.0")
+app = FastAPI(
+    title=Config.API_TITLE,
+    description="""
+    Professional analytics dashboard API with Row-Level Security (RLS) and Role-Based Access Control (RBAC).
+    
+    ## Features
+    
+    - **Authentication**: JWT-based authentication with Supabase
+    - **Row-Level Security**: Automatic data filtering by user region
+    - **RBAC**: Fine-grained permission-based access control
+    - **BigQuery Integration**: Real-time data from Google BigQuery
+    - **Caching**: High-performance in-memory caching for fast responses
+    
+    ## Authentication
+    
+    All endpoints (except `/api/auth/login`) require a Bearer token in the Authorization header.
+    
+    ```
+    Authorization: Bearer <your_jwt_token>
+    ```
+    
+    ## Row-Level Security
+    
+    Users automatically see only data for their assigned region. Admin users (region="ALL") can access all regions.
+    
+    ## API Documentation
+    
+    - **Swagger UI**: Available at `/docs` (interactive API explorer)
+    - **ReDoc**: Available at `/redoc` (alternative documentation)
+    - **OpenAPI Schema**: Available at `/openapi.json`
+    """,
+    version=Config.API_VERSION,
+    docs_url=Config.API_DOCS_URL,
+    redoc_url=Config.API_REDOC_URL,
+    openapi_url="/openapi.json" if not Config.IS_PRODUCTION else None,
+    contact={
+        "name": "Dashboard Performance API",
+    },
+    license_info={
+        "name": "MIT",
+    },
+)
 
-# CORS Middleware
+# Security Middleware (add first, so it processes responses last)
+from middleware.security import (
+    SecurityHeadersMiddleware,
+    RateLimitMiddleware,
+    ErrorHandlingMiddleware
+)
+
+if Config.RATE_LIMIT_ENABLED:
+    app.add_middleware(RateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(ErrorHandlingMiddleware)
+
+# CORS Middleware - Use configuration from Config
+cors_config = Config.get_cors_config()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **cors_config
 )
 
 
@@ -98,46 +158,81 @@ bigquery_service = None
 cache_manager = None  # Global cache manager
 
 try:
-    print("🔄 Initializing Mock Data Generator...")
+    logger.info("🔄 Initializing Mock Data Generator...")
     data_generator = get_data_generator()
-    print("✅ Mock Data Generator initialized")
+    logger.info("✅ Mock Data Generator initialized")
 except Exception as e:
-    print(f"⚠️ Failed to initialize Mock Data Generator: {e}")
-    with open("startup_error.log", "w") as f:
-        f.write(f"MockData Init Result: {str(e)}")
+    logger.error(f"⚠️ Failed to initialize Mock Data Generator: {e}", exc_info=True)
 
 try:
-    print("🔄 Initializing BigQuery Service...")
+    logger.info("🔄 Initializing BigQuery Service...")
     bigquery_service = get_bigquery_service()
-    print("✅ BigQuery Service initialized")
+    logger.info("✅ BigQuery Service initialized")
 except Exception as e:
-    print(f"⚠️ Failed to initialize BigQuery Service: {e}")
+    logger.error(f"⚠️ Failed to initialize BigQuery Service: {e}", exc_info=True)
 
 # Include admin routes
 app.include_router(admin_router)
 app.include_router(admin_employees_router)
 app.include_router(admin_master_router)
 app.include_router(admin_slots_router)
+app.include_router(admin_cache_router)
 
 # Startup event to initialize cache
 @app.on_event("startup")
 async def startup_event():
-    """Initialize cache on startup"""
+    """Initialize cache and services on startup"""
     global cache_manager
-    print("🚀 Initializing smart cache system...")
+    
+    # Initialize user context cache (with optional Redis)
+    try:
+        from user_context_cache import init_redis
+        redis_url = os.getenv("REDIS_URL")  # e.g., "redis://localhost:6379"
+        init_redis(redis_url)
+    except Exception as e:
+        logger.warning(f"Redis initialization skipped: {e}")
+    
+    # Initialize leaderboard cache
+    logger.info("🚀 Initializing smart cache system...")
     try:
         cache_manager = LeaderboardCache(bigquery_service)
-        print("✅ Cache initialized (background loading started)")
+        logger.info("✅ Cache initialized (background loading started)")
     except Exception as e:
-        print(f"❌ Failed to initialize cache: {e}")
+        logger.error(f"❌ Failed to initialize cache: {e}", exc_info=True)
+    
+    # Pre-load zone mappings for common regions (background)
+    try:
+        from zone_resolution_service import preload_zones_for_regions
+        # Get list of regions from cache or BigQuery
+        if cache_manager:
+            regions = cache_manager.get_regions()
+            if regions:
+                # Pre-load zones in background (non-blocking)
+                import threading
+                thread = threading.Thread(target=lambda: preload_zones_for_regions(regions[:10]))  # Top 10 regions
+                thread.daemon = True
+                thread.start()
+                logger.info(f"✅ Zone pre-loading started for {min(10, len(regions))} regions")
+    except Exception as e:
+        logger.warning(f"Zone pre-loading skipped: {e}")
 
 # Pydantic models
 
 
 
-@app.get("/api/auth/me", response_model=UserInfo)
+@app.get("/api/auth/me", response_model=UserInfo, tags=["Authentication"])
 async def get_me(current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Get current user information"""
+    """
+    Get current authenticated user information.
+    
+    Returns the user's profile including:
+    - Email and name
+    - Assigned region
+    - Role and permissions
+    - Scope information (for competition access)
+    
+    **Authentication Required:** Yes (Bearer token)
+    """
     return current_user
 
 
@@ -158,11 +253,20 @@ async def get_demo_users():
 
 # ============ Dashboard Data Endpoints (with RLS) ============
 
-@app.get("/api/dashboard/sales")
+@app.get("/api/dashboard/sales", tags=["Dashboard"])
 async def get_sales_data(user_region: str = Depends(get_user_region)):
     """
-    Get sales data filtered by user's region
-    Row-Level Security applied automatically
+    Get sales data filtered by user's region.
+    
+    **Row-Level Security:** Automatically filters data based on user's assigned region.
+    Admin users (region="ALL") see all regions.
+    
+    **Returns:** List of sales records with:
+    - Date/week information
+    - Revenue amounts
+    - Region-specific data
+    
+    **Authentication Required:** Yes
     """
     df = data_generator.get_sales_data(user_region)
     return df.to_dict(orient='records')
@@ -189,9 +293,25 @@ async def get_forecast_data(user_region: str = Depends(get_user_region)):
     return df.to_dict(orient='records')
 
 
-@app.get("/api/dashboard/kpis")
+@app.get("/api/dashboard/kpis", tags=["Dashboard"])
 async def get_kpis(user_region: str = Depends(get_user_region)):
-    """Get KPIs filtered by user's region (from high-speed cache)"""
+    """
+    Get Key Performance Indicators (KPIs) for the user's region.
+    
+    **Returns:**
+    - `total_revenue`: Total revenue for the period
+    - `total_target`: Target revenue
+    - `achievement_rate`: Percentage of target achieved
+    - `growth_rate`: Growth percentage compared to previous period
+    - `next_month_forecast`: Forecasted revenue for next month
+    - `total_salesman`: Number of salesmen in region
+    - `avg_customer_base`: Average customer base
+    - `avg_roa`: Average Return on Assets
+    
+    **Performance:** Data is served from high-speed in-memory cache.
+    
+    **Authentication Required:** Yes
+    """
     return cache_manager.get_kpis_cached(user_region)
 
 
@@ -221,7 +341,7 @@ async def get_region_comparison(current_user: Dict[str, Any] = Depends(get_curre
 
 # ============ BigQuery Leaderboard Endpoints (NEW) ============
 
-@app.get("/api/leaderboard")
+@app.get("/api/leaderboard", tags=["Leaderboard"])
 async def get_leaderboard(
     limit: Optional[int] = None,
     division: Optional[str] = None,
@@ -229,12 +349,26 @@ async def get_leaderboard(
     user_region: str = Depends(get_user_region)
 ):
     """
-    Get salesman leaderboard with RLS (cached)
+    Get salesman leaderboard with ranking and performance metrics.
     
-    Query params:
-    - limit: Maximum number of results (optional)
-    - division: Filter by division (optional)
-    - region: Override region (admin only, optional)
+    **Query Parameters:**
+    - `limit` (optional): Maximum number of results to return
+    - `division` (optional): Filter by division code
+    - `region` (optional): Override region filter (admin only)
+    
+    **Row-Level Security:**
+    - Regular users: Automatically filtered to their assigned region
+    - Admin users: Can override region via `region` query parameter
+    
+    **Returns:** List of salesman records with:
+    - Ranking position
+    - Salesman name and NIK
+    - Performance metrics (revenue, targets, achievement)
+    - Region and division information
+    
+    **Performance:** Data is served from high-speed in-memory cache.
+    
+    **Authentication Required:** Yes
     """
     try:
         # RLS SECURITY CHECK:
@@ -244,7 +378,7 @@ async def get_leaderboard(
         if user_region == "ALL" and region:
             target_region = region
             
-        print(f"🔒 RLS ENFORCED: User={user_region} | Requested={region} | Final Access={target_region}")
+        logger.debug(f"🔒 RLS ENFORCED: User={user_region} | Requested={region} | Final Access={target_region}")
         
         # Get from cache (auto-checks cutoff_date)
         data = cache_manager.get_leaderboard(
@@ -404,6 +538,8 @@ async def get_competition_ranks_v2(
     competition_id: str,
     level: str,
     region: Optional[str] = None,
+    zona_bm: Optional[str] = None,
+    zona_rbm: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -415,8 +551,8 @@ async def get_competition_ranks_v2(
              if region: target_region = region
         else:
              target_region = current_user.get("region", "ALL")
-             
-        data = bigquery_service.get_competition_ranks(
+            # Fetch competition ranking data
+        data = cache_manager.get_competition_ranks_cached(
             level=level, 
             competition_id=competition_id, 
             region=target_region,
@@ -424,8 +560,8 @@ async def get_competition_ranks_v2(
             user_nik=current_user.get('nik'),
             scope=current_user.get('scope'),
             scope_id=current_user.get('scope_id'),
-            zona_rbm=current_user.get('zona_rbm'),
-            zona_bm=current_user.get('zona_bm')
+            zona_rbm=zona_rbm or current_user.get('zona_rbm'),
+            zona_bm=zona_bm or current_user.get('zona_bm')
         )
         
         # Fetch cutoff metadata
@@ -455,9 +591,24 @@ async def get_competition_ranks_legacy(
 
 # ============ Health Check ============
 
-@app.get("/health")
+@app.get("/health", tags=["System"], include_in_schema=True)
 async def health_check():
-    """Detailed health check"""
+    """
+    Health check endpoint for monitoring and load balancers.
+    
+    **Returns:**
+    - `status`: Overall system status
+    - `cache`: Cache system information
+    - `bq_auth`: BigQuery authentication status
+    - `services`: Service operational status
+    
+    **Authentication Required:** No
+    
+    **Use Cases:**
+    - Load balancer health checks
+    - Monitoring system uptime
+    - Debugging connection issues
+    """
     return {
         "status": "healthy",
         "cache": cache_manager.get_cache_info() if cache_manager else "not_initialized",
@@ -478,9 +629,16 @@ if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
-@app.get("/api/debug/bq")
+@app.get("/api/debug/bq", include_in_schema=False)
 async def debug_bigquery(current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Diagnostic endpoint for BigQuery health"""
+    """
+    Diagnostic endpoint for BigQuery health (Super Admin only)
+    Hidden from API documentation. Only available in development mode.
+    """
+    # Only allow in development mode
+    if os.getenv("ENVIRONMENT", "development") == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+    
     if current_user.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Forbidden")
         
@@ -513,8 +671,19 @@ async def debug_bigquery(current_user: Dict[str, Any] = Depends(get_current_user
         
     return results
 
-@app.get("/api/debug/assignments")
-async def debug_check_assignments():
+@app.get("/api/debug/assignments", include_in_schema=False)
+async def debug_check_assignments(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """
+    Debug endpoint for checking assignments (Super Admin only)
+    Hidden from API documentation. Only available in development mode.
+    """
+    # Only allow in development mode
+    if os.getenv("ENVIRONMENT", "development") == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    if current_user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
     try:
         from supabase_client import get_supabase_client
         sb = get_supabase_client()
@@ -530,7 +699,7 @@ if not os.path.exists(frontend_path):
     frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
 
 if os.path.exists(frontend_path) and os.path.isdir(frontend_path):
-    print(f"📦 Production mode: Serving static files from {frontend_path}")
+    logger.info(f"📦 Production mode: Serving static files from {frontend_path}")
     # Mount assets folder
     if os.path.exists(os.path.join(frontend_path, "assets")):
         app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
@@ -549,4 +718,4 @@ if os.path.exists(frontend_path) and os.path.isdir(frontend_path):
         # Fallback to index.html for SPA routing
         return FileResponse(os.path.join(frontend_path, "index.html"))
 else:
-    print("🚀 Development mode: Static file serving disabled")
+    logger.info("🚀 Development mode: Static file serving disabled")

@@ -1,24 +1,103 @@
 """
 Authentication and authorization utilities using Supabase
+Optimized for scalability with caching and single-query resolution
 """
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, Header
 from supabase_client import get_supabase_client, supabase_request
 from gotrue.errors import AuthApiError
+from user_context_cache import (
+    get_cached_user_context,
+    set_cached_user_context,
+    invalidate_user_context
+)
+from zone_resolution_service import resolve_zones_for_region
+from logger import get_logger
 
-def resolve_user_slot_context(email: str) -> Dict[str, Any]:
+logger = get_logger("auth")
+
+def resolve_user_slot_context(email: str, use_cache: bool = True) -> Dict[str, Any]:
     """
     Dynamically resolve user role, region, and department from slot assignment.
+    Optimized with caching and single-query RPC function.
+    
+    Args:
+        email: User email address
+        use_cache: Whether to use cache (default: True)
+        
+    Returns:
+        User context dictionary with role, region, scope, etc.
     """
-    print(f"[AUTH] Resolving context for email: {email}")
+    # Check cache first
+    if use_cache:
+        cached = get_cached_user_context(email)
+        if cached:
+            logger.debug(f"Using cached context for {email}")
+            return cached
+    
     try:
-        # 1. Resolve NIK from email
+        # OPTIMIZED: Use single RPC query instead of 4-5 separate queries
         headers_hr = {'Accept-Profile': 'hr'}
-        emp_res = supabase_request('GET', 'employees', params={'email': f"ilike.{email}", 'select': 'nik,full_name'}, headers_extra=headers_hr)
-        print(f"[AUTH] Employee search result: {emp_res}")
+        
+        # Try optimized RPC function first (if available)
+        try:
+            # Use RPC endpoint with proper schema prefix
+            rpc_res = supabase_request(
+                'POST',
+                'rpc/get_user_context_by_email',
+                json_data={'p_email': email},
+                headers_extra=headers_hr
+            )
+            
+            if rpc_res.get('data'):
+                context_data = rpc_res['data']
+                
+                # Process RPC result
+                region_resolved = context_data.get('region_name') or context_data.get('region_code')
+                if not region_resolved or context_data.get('scope') == 'NATIONAL':
+                    region_resolved = 'ALL'
+                
+                # Resolve zones (moved to separate service, non-blocking)
+                zone_data = resolve_zones_for_region(region_resolved) if region_resolved != 'ALL' else {"zona_rbm": None, "zona_bm": None}
+                zona_rbm = zone_data.get('zona_rbm') or context_data.get('grbm_code')
+                zona_bm = zone_data.get('zona_bm')
+                
+                result = {
+                    "name": context_data.get('name'),
+                    "nik": context_data.get('nik'),
+                    "slot_code": context_data.get('slot_code'),
+                    "role": context_data.get('role', 'viewer'),
+                    "region": region_resolved if region_resolved else 'ALL',
+                    "zona_rbm": zona_rbm,
+                    "zona_bm": zona_bm,
+                    "scope": context_data.get('scope'),
+                    "scope_id": context_data.get('scope_id'),
+                    "depo_id": context_data.get('depo_id'),
+                    "division_id": context_data.get('division_id')
+                }
+                
+                # Cache the result
+                if use_cache and result.get('nik'):
+                    set_cached_user_context(email, result)
+                
+                logger.info(f"Resolved context via RPC for {email}: role={result.get('role')}, region={result.get('region')}")
+                return result
+        except Exception as rpc_error:
+            logger.warning(f"RPC function not available, falling back to legacy queries: {rpc_error}")
+        
+        # FALLBACK: Legacy multi-query approach (if RPC not available)
+        logger.debug(f"Resolving context (legacy) for email: {email}")
+        
+        # 1. Resolve NIK from email
+        emp_res = supabase_request(
+            'GET', 
+            'employees', 
+            params={'email': f"ilike.{email}", 'select': 'nik,full_name'}, 
+            headers_extra=headers_hr
+        )
         
         if not emp_res.get('data'):
-            print(f"[AUTH] No employee found for email: {email}")
+            logger.warning(f"No employee found for email: {email}")
             return {}
             
         emp = emp_res['data'][0]
@@ -41,8 +120,11 @@ def resolve_user_slot_context(email: str) -> Dict[str, Any]:
         )
         
         if not assign_res.get('data'):
-            print(f"[AUTH] No active assignment for NIK: {nik}")
-            return {"name": full_name, "nik": nik}
+            logger.warning(f"No active assignment for NIK: {nik}")
+            result = {"name": full_name, "nik": nik}
+            if use_cache:
+                set_cached_user_context(email, result)
+            return result
             
         slot_code = assign_res['data'][0]['slot_code']
         
@@ -56,11 +138,13 @@ def resolve_user_slot_context(email: str) -> Dict[str, Any]:
         )
         
         if not slot_res.get('data'):
-            print(f"[AUTH] Slot {slot_code} not found in master.sales_slots")
-            return {"name": full_name, "nik": nik, "slot_code": slot_code}
+            logger.warning(f"Slot {slot_code} not found in master.sales_slots")
+            result = {"name": full_name, "nik": nik, "slot_code": slot_code}
+            if use_cache:
+                set_cached_user_context(email, result)
+            return result
             
         slot = slot_res['data'][0]
-        print(f"[AUTH] Found slot data: {slot}")
         
         # 4. Resolve Full Region Name (for BigQuery compatibility)
         region_resolved = slot.get('scope_id')
@@ -78,32 +162,14 @@ def resolve_user_slot_context(email: str) -> Dict[str, Any]:
             if region_res.get('data'):
                 region_resolved = region_res['data'][0]['name']
                 grbm_code = region_res['data'][0].get('grbm_code')
-                print(f"[AUTH] Resolved full region name: {region_resolved} | GRBM: {grbm_code}")
+                logger.debug(f"Resolved region: {region_resolved} | GRBM: {grbm_code}")
 
-        # 5. Resolve Competition Zones (ZONA_RBM, ZONA_BM) from BigQuery
-        zona_rbm = grbm_code
-        zona_bm = None
-        
-        if region_resolved != 'ALL':
-            try:
-                from bigquery_service import get_bigquery_service
-                bq = get_bigquery_service()
-                # Query mapping for this region
-                zone_query = f"""
-                SELECT DISTINCT ZONA_RBM, ZONA_BM 
-                FROM `{bq.project_id}.{bq.dataset}.rank_ass` 
-                WHERE REGION = '{region_resolved}' 
-                LIMIT 1
-                """
-                zone_df = bq.client.query(zone_query).to_dataframe()
-                if not zone_df.empty:
-                    zona_rbm = zone_df.iloc[0]['ZONA_RBM']
-                    zona_bm = zone_df.iloc[0]['ZONA_BM']
-                    print(f"[AUTH] Resolved BQ Zones: RBM={zona_rbm}, BM={zona_bm}")
-            except Exception as bqe:
-                print(f"[AUTH] BigQuery Zone Resolution Error: {bqe}")
+        # Resolve zones using separate service (non-blocking, cached)
+        zone_data = resolve_zones_for_region(region_resolved) if region_resolved != 'ALL' else {"zona_rbm": None, "zona_bm": None}
+        zona_rbm = zone_data.get('zona_rbm') or grbm_code
+        zona_bm = zone_data.get('zona_bm')
 
-        return {
+        result = {
             "name": full_name,
             "nik": nik,
             "slot_code": slot_code,
@@ -117,8 +183,15 @@ def resolve_user_slot_context(email: str) -> Dict[str, Any]:
             "division_id": slot.get('division_id')
         }
         
+        # Cache the result
+        if use_cache:
+            set_cached_user_context(email, result)
+        
+        logger.info(f"Resolved context (legacy) for {email}: role={result.get('role')}, region={result.get('region')}")
+        return result
+        
     except Exception as e:
-        print(f"[AUTH] Error resolving slot context: {e}")
+        logger.error(f"Error resolving slot context for {email}: {e}", exc_info=True)
         return {}
 
 def verify_token(token: str) -> Dict[str, Any]:
@@ -149,7 +222,7 @@ def verify_token(token: str) -> Dict[str, Any]:
         response = requests.get(api_url, headers=headers)
         
         if response.status_code != 200:
-             print(f"Auth verify failed: {response.text}")
+             logger.warning(f"Auth verify failed: {response.status_code} - {response.text[:200]}")
              raise HTTPException(status_code=401, detail="Invalid token or expired session")
              
         user_data = response.json()
@@ -178,18 +251,20 @@ def verify_token(token: str) -> Dict[str, Any]:
             "role": metadata.get("role", "viewer")
         }
 
-        # DYNAMIC RESOLUTION: Prioritize Slot-based attributes
-        slot_context = resolve_user_slot_context(email)
+        # DYNAMIC RESOLUTION: Prioritize Slot-based attributes (with caching)
+        slot_context = resolve_user_slot_context(email, use_cache=True)
         if slot_context:
-            print(f"[AUTH] Resolved dynamic context for {email}: {slot_context}")
+            logger.debug(f"Resolved dynamic context for {email}: role={slot_context.get('role')}, region={slot_context.get('region')}")
             res.update(slot_context)
             
         return res
     
     except HTTPException as he:
         raise he
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Token verification failed (Internal): {str(e)}")
+        logger.error(f"Token verification failed (Internal): {str(e)}", exc_info=True)
         raise HTTPException(status_code=401, detail="Authentication failed")
 
 
@@ -198,9 +273,9 @@ def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
     Authenticate user using Supabase Auth (Raw HTTP)
     Returns dict with access_token and user info if successful
     """
-    # supabase = get_supabase_client()
     import os
-    import requests
+    from connection_pool import get_http_session
+    requests = get_http_session()  # Use pooled session
     
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_KEY")
@@ -224,7 +299,7 @@ def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
         response = requests.post(api_url, headers=headers, json=payload)
         
         if response.status_code != 200:
-            print(f"Auth Login Error: {response.text}")
+            logger.warning(f"Auth Login Error: {response.status_code} - {response.text[:200]}")
             return None
             
         data = response.json()
@@ -244,17 +319,16 @@ def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
             "role": metadata.get("role", "viewer")
         }
 
-        # DYNAMIC RESOLUTION: Prioritize Slot-based attributes
-        slot_context = resolve_user_slot_context(user.get("email"))
+        # DYNAMIC RESOLUTION: Prioritize Slot-based attributes (with caching)
+        slot_context = resolve_user_slot_context(user.get("email"), use_cache=True)
         if slot_context:
-            print(f"[AUTH] Resolved dynamic context for {user.get('email')}: {slot_context}")
+            logger.debug(f"Resolved dynamic context for {user.get('email')}: role={slot_context.get('role')}, region={slot_context.get('region')}")
             res.update(slot_context)
             
         return res
         
-    # except AuthApiError as e: # AuthApiError might not be importable if not using lib
     except Exception as e:
-        print(f"Unexpected Auth Error (HTTP): {str(e)}")
+        logger.error(f"Unexpected Auth Error (HTTP): {str(e)}", exc_info=True)
         return None
 
 

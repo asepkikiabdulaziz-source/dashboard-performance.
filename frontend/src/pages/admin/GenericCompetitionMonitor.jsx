@@ -51,34 +51,32 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
     const [data, setData] = useState([]);
     const [metadata, setMetadata] = useState({ tgl_update: null, ideal: null });
 
-    // Reset data when competition changes
-    useEffect(() => {
-        setData([]);
-        setActiveTab('ass');
-    }, [competitionId]);
+    // Region/Zone Filter State
+    const [selectedRegion, setSelectedRegion] = useState('ALL');
+    const [selectedZonaBM, setSelectedZonaBM] = useState('ALL');
+    const [selectedZonaRBM, setSelectedZonaRBM] = useState('ALL');
+    
+    // Store all regions/zones from unfiltered data
+    const [allRegions, setAllRegions] = useState(['ALL']);
+    const [allZonasBM, setAllZonasBM] = useState(['ALL']);
+    const [allZonasRBM, setAllZonasRBM] = useState(['ALL']);
 
-    useEffect(() => {
-        if (competitionId) {
-            fetchData(competitionId, activeTab);
-        }
-    }, [competitionId, activeTab]);
-
-    // Reset filters and fetch when switching tabs
-    useEffect(() => {
-        setSelectedRegion('ALL');
-        setSelectedZonaBM('ALL');
-        setSelectedZonaRBM('ALL');
-        if (competitionId) {
-            fetchData(competitionId, activeTab, 'ALL');
-        }
-    }, [activeTab]);
-
-    const fetchData = async (compId, level, regionOverride = null) => {
+    const fetchData = async (compId, level, regionFilter = 'ALL', zonaBMFilter = 'ALL', zonaRBMFilter = 'ALL') => {
         setLoading(true);
         try {
-            // Use override or selectedRegion
-            const region = regionOverride !== null ? regionOverride : selectedRegion;
-            const url = `/dashboard/competition/${compId}/${level}${region !== 'ALL' ? `?region=${encodeURIComponent(region)}` : ''}`;
+            // Determine active filter based on level
+            let queryParams = [];
+
+            if (level === 'ass' && regionFilter !== 'ALL') {
+                queryParams.push(`region=${encodeURIComponent(regionFilter)}`);
+            } else if (level === 'bm' && zonaBMFilter !== 'ALL') {
+                queryParams.push(`zona_bm=${encodeURIComponent(zonaBMFilter)}`);
+            } else if (level === 'rbm' && zonaRBMFilter !== 'ALL') {
+                queryParams.push(`zona_rbm=${encodeURIComponent(zonaRBMFilter)}`);
+            }
+
+            const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
+            const url = `/dashboard/competition/${compId}/${level}${queryString}`;
 
             const response = await api.get(url);
             const rawData = response.data.data || [];
@@ -100,26 +98,66 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
             setLoading(false);
         }
     };
+    
+    // Fetch ALL data (without filters) to get complete region/zone lists
+    const fetchAllDataForOptions = async (compId, level) => {
+        try {
+            // Fetch without any filters to get all regions/zones
+            const url = `/dashboard/competition/${compId}/${level}`;
+            const response = await api.get(url);
+            const rawData = response.data.data || [];
+            
+            // Extract all unique regions/zones
+            if (level === 'ass') {
+                const unique = [...new Set(rawData.map(item => item.region).filter(Boolean))];
+                setAllRegions(['ALL', ...unique.sort()]);
+            } else if (level === 'bm') {
+                const unique = [...new Set(rawData.map(item => item.zona_bm).filter(Boolean))];
+                setAllZonasBM(['ALL', ...unique.sort()]);
+            } else if (level === 'rbm') {
+                const unique = [...new Set(rawData.map(item => item.zona_rbm).filter(Boolean))];
+                setAllZonasRBM(['ALL', ...unique.sort()]);
+            }
+        } catch (error) {
+            console.error('Failed to fetch all data for options:', error);
+        }
+    };
 
-    // Region/Zone Filter State
-    const [selectedRegion, setSelectedRegion] = useState('ALL');
-    const [selectedZonaBM, setSelectedZonaBM] = useState('ALL');
-    const [selectedZonaRBM, setSelectedZonaRBM] = useState('ALL');
+    // Fetch ALL data (without filters) when competition or tab changes to populate options
+    useEffect(() => {
+        if (competitionId && activeTab) {
+            fetchAllDataForOptions(competitionId, activeTab);
+        }
+    }, [competitionId, activeTab]);
+    
+    // Reset filters when tab changes
+    useEffect(() => {
+        setSelectedRegion('ALL');
+        setSelectedZonaBM('ALL');
+        setSelectedZonaRBM('ALL');
+    }, [activeTab]);
+
+    // Fetch data when competition, activeTab, or ANY filter changes
+    useEffect(() => {
+        if (competitionId) {
+            fetchData(competitionId, activeTab, selectedRegion, selectedZonaBM, selectedZonaRBM);
+        }
+    }, [competitionId, activeTab, selectedRegion, selectedZonaBM, selectedZonaRBM]);
 
     const regions = useMemo(() => {
-        const unique = [...new Set(data.map(item => item.region).filter(Boolean))];
-        return ['ALL', ...unique.sort()];
-    }, [data]);
+        // Use allRegions from unfiltered data, not from filtered data
+        return allRegions;
+    }, [allRegions]);
 
     const zonasBM = useMemo(() => {
-        const unique = [...new Set(data.map(item => item.zona_bm).filter(Boolean))];
-        return ['ALL', ...unique.sort()];
-    }, [data]);
+        // Use allZonasBM from unfiltered data, not from filtered data
+        return allZonasBM;
+    }, [allZonasBM]);
 
     const zonasRBM = useMemo(() => {
-        const unique = [...new Set(data.map(item => item.zona_rbm).filter(Boolean))];
-        return ['ALL', ...unique.sort()];
-    }, [data]);
+        // Use allZonasRBM from unfiltered data, not from filtered data
+        return allZonasRBM;
+    }, [allZonasRBM]);
 
     // Derived Data (Filtered)
     const filteredData = useMemo(() => {
@@ -488,6 +526,7 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
                                 value={selectedRegion}
                                 onChange={setSelectedRegion}
                                 style={{ width: 200 }}
+                                disabled={user?.region !== 'ALL'}
                                 options={regions.map(r => ({ label: r || "N/A", value: r || "" }))}
                             />
                         </div>
@@ -502,6 +541,7 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
                                     value={selectedZonaBM}
                                     onChange={setSelectedZonaBM}
                                     style={{ width: 200 }}
+                                    disabled={user?.region !== 'ALL'}
                                     options={zonasBM.map(z => ({ label: z || "N/A", value: z || "" }))}
                                 />
                             </div>
@@ -516,6 +556,7 @@ const GenericCompetitionMonitor = ({ competitionId, title, period, embedded = fa
                                     value={selectedZonaRBM}
                                     onChange={setSelectedZonaRBM}
                                     style={{ width: 200 }}
+                                    disabled={user?.region !== 'ALL'}
                                     options={zonasRBM.map(z => ({ label: z || "N/A", value: z || "" }))}
                                 />
                             </div>

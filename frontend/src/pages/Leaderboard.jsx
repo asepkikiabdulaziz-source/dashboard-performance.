@@ -655,6 +655,7 @@ const Leaderboard = () => {
                         onChange={setSelectedRegion}
                         showSearch
                         optionFilterProp="children"
+                        disabled={user?.region !== 'ALL'}
                         placeholder="Pilih Region"
                     >
                         {regions.map(region => (

@@ -21,11 +21,12 @@ class LeaderboardCache:
         self.bigquery_service = bigquery_service
         self._lock = threading.RLock()
         
-        # Cache storage (Atomic reference swapping targets)
+        # Cache storage
         self._all_data: List[Dict[str, Any]] = []
+        self._competition_data: Dict[str, List[Dict[str, Any]]] = {} # Map "compid_level" -> data
         self._cutoff_date: Optional[str] = None
         self._last_refresh: Optional[datetime] = None
-        self._last_error: Optional[str] = None # Track errors
+        self._last_error: Optional[str] = None
         
         # Warm cache in background
         logger.info("🚀 Initializing LeaderboardCache background warming...")
@@ -37,52 +38,50 @@ class LeaderboardCache:
         """Reload all data from BigQuery with minimal lock hold time"""
         try:
             print("🔄 [CACHE] Starting refresh from BigQuery...")
-            logger.info("🔄 Refreshing leaderboard cache from BigQuery...")
             start_time = datetime.now()
             
-            # Safety check for service initialization
             if not self.bigquery_service:
-                raise Exception("BigQuery Service is not initialized (bigquery_service is None)")
-            if not getattr(self.bigquery_service, 'client', None):
-                raise Exception("BigQuery Client is not available (client is None)")
+                raise Exception("BigQuery Service is not initialized")
             
-            # 1. Fetch data OUTSIDE lock (Slow part)
-            print("🔍 [CACHE] Fetching cutoff date...")
+            # 1. Fetch data OUTSIDE lock
             cutoff_date = self.bigquery_service.get_cutoff_date()
-            print(f"📅 [CACHE] Cutoff Date: {cutoff_date}")
             
-            print("🚀 [CACHE] Executing BigQuery Leaderboard Query (ALL Regions)...")
-            all_data_df = self.bigquery_service.get_leaderboard(
-                region="ALL",
-                division=None,
-                limit=None
-            )
-            
-            row_count = len(all_data_df)
-            print(f"📊 [CACHE] Query Complete. Found {row_count} records.")
-            
-            print("🧩 [CACHE] Converting to dictionary...")
+            # Fetch normal leaderboard
+            all_data_df = self.bigquery_service.get_leaderboard(region="ALL")
             all_data = all_data_df.to_dict(orient='records')
             
-            # 2. Update status and data INSIDE lock (Fast part)
-            print("🔒 [CACHE] Updating in-memory state...")
+            # Fetch AMO Competition data (ASS, BM, RBM)
+            comp_data = {}
+            from competition_config import COMPETITIONS
+            for comp_id in COMPETITIONS:
+                for level in ['ass', 'bm', 'rbm']:
+                    print(f"🔍 [CACHE] Pre-loading {comp_id} level {level}...")
+                    try:
+                        data = self.bigquery_service.get_competition_ranks(
+                            level=level,
+                            competition_id=comp_id,
+                            region="ALL" # Cache national version
+                        )
+                        comp_data[f"{comp_id}_{level}"] = data
+                    except Exception as ce:
+                        print(f"⚠️ [CACHE] Failed to pre-load {comp_id}_{level}: {ce}")
+            
+            # 2. Update status and data INSIDE lock
             with self._lock:
                 self._all_data = all_data
+                self._competition_data = comp_data
                 self._cutoff_date = cutoff_date
                 self._last_refresh = datetime.now()
-                self._last_error = None # Clear error on success
+                self._last_error = None
             
             elapsed = (datetime.now() - start_time).total_seconds()
-            msg = f"✅ [CACHE] REFRESHED: {len(all_data)} records in {elapsed:.2f}s"
-            logger.info(msg)
-            print(msg)
+            print(f"✅ [CACHE] REFRESHED: {len(all_data)} leaderboard + {len(comp_data)} comp levels in {elapsed:.2f}s")
             
         except Exception as e:
             error_msg = str(e)
             print(f"❌ [CACHE] FATAL ERROR during refresh: {error_msg}")
             with self._lock:
                 self._last_error = error_msg
-            logger.error(f"❌ Cache refresh failed: {e}")
             import traceback
             traceback.print_exc()
 
@@ -255,6 +254,115 @@ class LeaderboardCache:
         """Get top performers from memory"""
         data = self.get_leaderboard(region=region, limit=limit)
         return data
+
+    def get_top_performers_summary(self, target_region: str = "ALL") -> List[Dict[str, Any]]:
+        """Get top salesman per region and division for modal view"""
+        with self._lock:
+            data = self._all_data
+            
+        if not data:
+            return []
+            
+        # Filter by region if requested
+        regions = sorted(list(set(r.get('region') for r in data if r.get('region'))))
+        if target_region and target_region != "ALL":
+            regions = [target_region]
+            
+        summary = []
+        for reg in regions:
+            reg_data = [r for r in data if r.get('region') == reg]
+            divisions = sorted(list(set(r.get('division') for r in reg_data if r.get('division'))))
+            
+            for div in divisions:
+                div_data = [r for r in reg_data if r.get('division') == div]
+                if div_data:
+                    # Sort by total_score DESC
+                    top = sorted(div_data, key=lambda x: x.get('total_score', 0), reverse=True)[0]
+                    summary.append(top)
+        
+        return summary
+
+    def get_competition_ranks_cached(
+        self,
+        level: str,
+        competition_id: str,
+        region: str = "ALL",
+        role: str = "viewer",
+        user_nik: Optional[str] = None,
+        scope: Optional[str] = None,
+        scope_id: Optional[str] = None,
+        zona_rbm: Optional[str] = None,
+        zona_bm: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Filtered competition data from memory"""
+        self._check_and_refresh()
+        
+        cache_key = f"{competition_id}_{level.lower()}"
+        with self._lock:
+            data = self._competition_data.get(cache_key)
+            
+        if not data:
+            # Fallback for cold cache
+            return self.bigquery_service.get_competition_ranks(
+                level=level,
+                competition_id=competition_id,
+                region=region,
+                role=role,
+                user_nik=user_nik,
+                scope=scope,
+                scope_id=scope_id,
+                zona_rbm=zona_rbm,
+                zona_bm=zona_bm
+            )
+            
+        # In-memory filtering logic (mirrors bigquery_service.py RLS)
+        filtered = data
+        user_role_lower = role.lower()
+        active_level_lower = level.lower()
+        is_admin = user_role_lower in ['super_admin', 'admin', 'master', 'head']
+        is_national_view = False
+
+        if not is_admin:
+            if active_level_lower == 'rbm':
+                # If user is specific RBM, or admin/higher restricted them, or they chose a filter
+                final_rbm = zona_rbm or region # region can be RBM code sometimes
+                if final_rbm and final_rbm != "ALL":
+                    filtered = [r for r in filtered if r.get('zona_rbm') == final_rbm or r.get('region') == final_rbm]
+                else:
+                    is_national_view = True
+                    
+            elif active_level_lower == 'bm':
+                # BM filtering: prioritize zona_bm parameter, then fallbacks
+                if zona_bm and zona_bm != "ALL":
+                    filtered = [r for r in filtered if r.get('zona_bm') == zona_bm]
+                elif zona_rbm and zona_rbm != "ALL":
+                    filtered = [r for r in filtered if r.get('zona_rbm') == zona_rbm]
+                elif region != "ALL":
+                    filtered = [r for r in filtered if r.get('region') == region]
+                else:
+                    is_national_view = True
+                    
+            elif active_level_lower == 'ass':
+                # ASS filtering
+                if user_role_lower == 'bm' and scope_id:
+                    filtered = [r for r in filtered if r.get('zona_bm') == scope_id or r.get('cabang') == scope_id]
+                elif region != "ALL":
+                    filtered = [r for r in filtered if r.get('region') == region]
+                else:
+                    is_national_view = True
+        else:
+            # Admin path: respects explicit filters passed as parameters
+            if active_level_lower == 'ass' and region != "ALL":
+                filtered = [r for r in filtered if r.get('region') == region]
+            elif active_level_lower == 'bm' and zona_bm and zona_bm != "ALL":
+                filtered = [r for r in filtered if r.get('zona_bm') == zona_bm]
+            elif active_level_lower == 'rbm' and zona_rbm and zona_rbm != "ALL":
+                filtered = [r for r in filtered if r.get('zona_rbm') == zona_rbm]
+            else:
+                is_national_view = True
+        
+        # Follow original order from cache (which follows DB order)
+        return filtered
 
     def get_cache_info(self) -> Dict[str, Any]:
         """Diagnostic info for /health"""

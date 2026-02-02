@@ -43,4 +43,22 @@ jobs:
           --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
           --region ${{ env.REGION }} \
           --platform managed \
-          --allow-unauthenticated
+          --allow-unauthenticated \
+          --port 8080 \
+          --memory 1Gi \
+          --cpu 1 \
+          --min-instances 0 \
+          --max-instances 10 \
+          --timeout 300 \
+          --set-env-vars ENVIRONMENT=production \
+          --set-env-vars LOG_LEVEL=INFO \
+          --set-env-vars RATE_LIMIT_ENABLED=true \
+          --set-env-vars CACHE_ENABLED=true \
+          --set-secrets SUPABASE_URL=SUPABASE_URL:latest \
+          --set-secrets SUPABASE_KEY=SUPABASE_KEY:latest \
+          --set-secrets SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest \
+          --set-secrets BIGQUERY_PROJECT_ID=BIGQUERY_PROJECT_ID:latest \
+          --set-secrets BIGQUERY_DATASET=BIGQUERY_DATASET:latest \
+          --set-secrets BIGQUERY_TABLE=BIGQUERY_TABLE:latest \
+          --set-secrets ALLOWED_ORIGINS=ALLOWED_ORIGINS:latest \
+          --set-secrets SECRET_KEY=SECRET_KEY:latest

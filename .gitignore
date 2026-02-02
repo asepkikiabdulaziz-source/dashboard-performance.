@@ -33,12 +33,18 @@ logs/
 !requirements.txt
 !backend/requirements.txt
 
+# Scripts backup folder
+backend/scripts/backup/
+
 # Secrets & Credentials
 .env
 .env.local
+.env.production
 *-credentials.json
+myproject-*.json
 *.key
 *.pem
+service-account*.json
 
 # Data Files (Avoid cluttering repo with large binaries)
 *.xlsx
