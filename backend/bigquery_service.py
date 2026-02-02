@@ -48,6 +48,7 @@ class BigQueryService:
         # All values must be set via environment variables
         self.project_id = os.getenv('BIGQUERY_PROJECT_ID', '').strip()
         self.dataset = os.getenv('BIGQUERY_DATASET', '').strip()
+        # Main table for leaderboard (other tables are configured in competition_config.py)
         self.table = os.getenv('BIGQUERY_TABLE', '').strip()
         
         # Validate all required values are set - NO DEFAULTS ALLOWED
@@ -59,10 +60,11 @@ class BigQueryService:
             raise ValueError("BIGQUERY_DATASET environment variable is required. Please set it in your deployment configuration.")
         if not self.table:
             logger.error("BIGQUERY_TABLE is not set")
-            raise ValueError("BIGQUERY_TABLE environment variable is required. Please set it in your deployment configuration.")
+            raise ValueError("BIGQUERY_TABLE environment variable is required. This is the main leaderboard table. Competition tables are configured separately in competition_config.py.")
         
         self.full_table_id = f"`{self.project_id}.{self.dataset}.{self.table}`"
-        logger.info(f"BigQuery configured: {self.full_table_id}")
+        logger.info(f"BigQuery configured: Project={self.project_id}, Dataset={self.dataset}, Main Table={self.table}")
+        logger.info(f"Note: Competition tables (rank_ass, rank_bm, rank_rbm) are configured in competition_config.py and use the same dataset.")
     
     def _apply_region_filter(self, region: str) -> str:
         """
