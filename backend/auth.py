@@ -281,7 +281,7 @@ def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
     key = os.environ.get("SUPABASE_KEY")
     
     if not url or not key:
-        print("Missing Supabase URL/Key")
+        logger.error("Missing Supabase URL/Key - Check environment variables SUPABASE_URL and SUPABASE_KEY")
         return None
 
     try:
