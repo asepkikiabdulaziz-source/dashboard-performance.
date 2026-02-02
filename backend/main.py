@@ -606,6 +606,22 @@ async def get_competition_ranks_legacy(
     """Legacy endpoint wrapper for v2"""
     return await get_competition_ranks_v2("amo_jan_2026", level, region, current_user)
 
+# ============ Debug Endpoints ============
+
+@app.get("/api/debug/config-check", include_in_schema=False)
+async def config_check():
+    """Check if required environment variables are set (for debugging)"""
+    import os
+    config = {
+        "SUPABASE_URL": "✅ SET" if os.getenv("SUPABASE_URL") else "❌ MISSING",
+        "SUPABASE_KEY": "✅ SET" if os.getenv("SUPABASE_KEY") else "❌ MISSING",
+        "SUPABASE_SERVICE_ROLE_KEY": "✅ SET" if os.getenv("SUPABASE_SERVICE_ROLE_KEY") else "❌ MISSING",
+        "BIGQUERY_PROJECT_ID": "✅ SET" if os.getenv("BIGQUERY_PROJECT_ID") else "❌ MISSING",
+        "BIGQUERY_DATASET": "✅ SET" if os.getenv("BIGQUERY_DATASET") else "❌ MISSING",
+        "BIGQUERY_TABLE": "✅ SET" if os.getenv("BIGQUERY_TABLE") else "❌ MISSING",
+    }
+    return {"status": "ok", "config": config}
+
 # ============ Health Check ============
 
 @app.get("/health", tags=["System"], include_in_schema=True)
