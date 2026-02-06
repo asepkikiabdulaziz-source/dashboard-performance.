@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ConfigProvider } from 'antd'
 import App from './App.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import './index.css'
 
 // Ant Design theme configuration
@@ -16,7 +17,9 @@ const theme = {
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
         <ConfigProvider theme={theme}>
-            <App />
+            <ErrorBoundary>
+                <App />
+            </ErrorBoundary>
         </ConfigProvider>
     </React.StrictMode>,
 )
