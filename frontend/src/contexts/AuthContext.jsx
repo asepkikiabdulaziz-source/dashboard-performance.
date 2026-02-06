@@ -1,5 +1,12 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../api';
+import {
+    storageGetItem,
+    storageGetJSON,
+    storageSetItem,
+    storageRemoveItem,
+    clearAuthStorage
+} from '../utils/storage';
 
 const AuthContext = createContext(null);
 
@@ -9,11 +16,13 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         // Check if user is logged in
-        const token = localStorage.getItem('access_token');
-        const savedUser = localStorage.getItem('user');
+        const token = storageGetItem('access_token');
+        const savedUser = storageGetJSON('user');
 
         if (token && savedUser) {
-            setUser(JSON.parse(savedUser));
+            setUser(savedUser);
+        } else if (token && !savedUser) {
+            storageRemoveItem('access_token');
         }
         setLoading(false);
     }, []);
@@ -23,8 +32,8 @@ export const AuthProvider = ({ children }) => {
             const response = await api.post('/auth/login', { email, password });
             const { access_token, user: userData } = response.data;
 
-            localStorage.setItem('access_token', access_token);
-            localStorage.setItem('user', JSON.stringify(userData));
+            storageSetItem('access_token', access_token);
+            storageSetItem('user', JSON.stringify(userData));
             setUser(userData);
 
             return { success: true };
@@ -37,8 +46,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
+        clearAuthStorage();
         setUser(null);
     };
 
